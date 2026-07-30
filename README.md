@@ -16,8 +16,10 @@ Luego abre la URL que muestra Vite, normalmente `http://localhost:5173`.
 1. Crea un proyecto en Supabase.
 2. Abre `SQL Editor`.
 3. Copia y ejecuta el contenido de `supabase/schema.sql`.
-4. Copia `.env.example` como `.env`.
-5. Completa estas variables:
+4. Crea un usuario administrador en `Authentication -> Users -> Add user`.
+5. Guarda ese correo y contraseña para entrar al panel privado.
+6. Copia `.env.example` como `.env`.
+7. Completa estas variables:
 
 ```env
 VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
@@ -25,7 +27,7 @@ VITE_SUPABASE_ANON_KEY=tu_anon_key_de_supabase
 VITE_SUPABASE_BUCKET=wedding-memories
 ```
 
-6. Reinicia el servidor de desarrollo:
+8. Reinicia el servidor de desarrollo:
 
 ```bash
 npm.cmd run dev
@@ -33,7 +35,12 @@ npm.cmd run dev
 
 La app detecta Supabase automaticamente. Si las variables no existen, sigue funcionando en modo demo.
 
-Nota: las politicas de `supabase/schema.sql` permiten insertar, leer y eliminar desde el frontend para que la primera version funcione rapido. Para produccion conviene proteger el panel con autenticacion real antes de permitir eliminaciones.
+Seguridad incluida:
+
+- Invitados anonimos pueden subir fotos/videos.
+- Invitados anonimos pueden leer la galeria privada dentro de la app.
+- Solo usuarios autenticados en Supabase Auth pueden aprobar, ocultar o eliminar recuerdos.
+- Las fotos nuevas quedan `Pendiente` por defecto y no aparecen en la galeria en vivo hasta aprobarlas.
 
 ## Deploy En Vercel
 
@@ -61,6 +68,12 @@ Install Command: npm install
 ```
 
 El archivo `vercel.json` ya deja esa configuracion lista y agrega fallback a `index.html` para que la app funcione como SPA.
+
+La ruta `/recuerdos` funciona por el fallback de Vercel. Puedes usar esta URL para el QR:
+
+```text
+https://tu-proyecto.vercel.app/recuerdos
+```
 
 ## Panel privado
 
@@ -104,6 +117,13 @@ No guardes la API key directamente en el proyecto. Si ya compartiste una clave r
 - Aviso de privacidad y consentimiento antes de subir.
 - Subida real a Supabase Storage cuando las variables estan configuradas.
 - Guardado de metadatos en la tabla `wedding_memories`.
+- Login real del panel con Supabase Auth.
+- Moderacion de recuerdos: pendiente, aprobado y oculto.
+- Galeria en vivo solo con recuerdos aprobados.
+- Compresion automatica de fotos grandes.
+- Limites: 20 archivos por subida, fotos hasta 10 MB y videos hasta 100 MB.
+- Descarga ZIP desde el panel privado.
+- Pantalla QR imprimible.
 - URL recomendada para QR: `kevin-karen-boda.netlify.app/recuerdos`.
 - Enlace de regreso a la invitacion oficial.
 - Panel privado con login, estadisticas, filtros y galeria.

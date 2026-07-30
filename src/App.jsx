@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import JSZip from 'jszip'
 import { isSupabaseConfigured, memoriesBucket, supabase } from './supabaseClient'
 
 const moments = ['Preparativos', 'Ceremonia', 'Cena', 'Fiesta', 'Baile', 'Otro']
@@ -7,6 +8,11 @@ const weddingDate = '08.08.2026'
 const privateCode = 'kevinkaren2026'
 const invitationUrl = 'https://kevin-karen-boda.netlify.app/'
 const memoryDomain = 'kevin-karen-boda.netlify.app/recuerdos'
+const publicMemoryUrl = `https://${memoryDomain}`
+const maxFilesPerUpload = 20
+const maxPhotoSize = 10 * 1024 * 1024
+const maxVideoSize = 100 * 1024 * 1024
+const maxImageDimension = 2200
 
 const seedMemories = [
   {
@@ -19,6 +25,7 @@ const seedMemories = [
     fileName: 'entrada-ceremonia.jpg',
     type: 'image',
     accent: 'champagne',
+    approved: true,
   },
   {
     id: 'seed-2',
@@ -30,6 +37,7 @@ const seedMemories = [
     fileName: 'brindis.mp4',
     type: 'video',
     accent: 'olive',
+    approved: true,
   },
   {
     id: 'seed-3',
@@ -41,6 +49,7 @@ const seedMemories = [
     fileName: 'primer-baile.jpg',
     type: 'image',
     accent: 'rose',
+    approved: false,
   },
 ]
 
@@ -57,6 +66,7 @@ function mapSupabaseMemory(row) {
     type: row.file_type,
     previewUrl: row.public_url,
     accent: row.file_type === 'video' ? 'olive' : 'champagne',
+    approved: row.approved,
   }
 }
 
@@ -67,6 +77,50 @@ function getSafeFileName(fileName) {
     .replace(/[^a-zA-Z0-9._-]/g, '-')
     .replace(/-+/g, '-')
     .toLowerCase()
+}
+
+function formatFileSize(bytes) {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`
+}
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const image = new Image()
+    const url = URL.createObjectURL(file)
+
+    image.onload = () => {
+      URL.revokeObjectURL(url)
+      resolve(image)
+    }
+
+    image.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('No se pudo leer la imagen para comprimirla.'))
+    }
+
+    image.src = url
+  })
+}
+
+async function compressImage(file) {
+  const compressibleTypes = ['image/jpeg', 'image/png', 'image/webp']
+  if (!compressibleTypes.includes(file.type) || file.size <= maxPhotoSize) return file
+
+  const image = await loadImage(file)
+  const scale = Math.min(1, maxImageDimension / Math.max(image.width, image.height))
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(image.width * scale)
+  canvas.height = Math.round(image.height * scale)
+
+  const context = canvas.getContext('2d')
+  context.drawImage(image, 0, 0, canvas.width, canvas.height)
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.82))
+  if (!blob || blob.size >= file.size) return file
+
+  const compressedName = file.name.replace(/\.[^.]+$/, '') + '.jpg'
+  return new File([blob], compressedName, { type: 'image/jpeg', lastModified: Date.now() })
 }
 
 function formatDate(value) {
@@ -80,12 +134,16 @@ function App() {
   const [view, setView] = useState('home')
   const [isAdmin, setIsAdmin] = useState(false)
   const [loginCode, setLoginCode] = useState('')
+  const [loginEmail, setLoginEmail] = useState('')
+  const [loginPassword, setLoginPassword] = useState('')
   const [loginError, setLoginError] = useState('')
   const [memories, setMemories] = useState(() => (isSupabaseConfigured ? [] : seedMemories))
   const [isLoadingMemories, setIsLoadingMemories] = useState(isSupabaseConfigured)
   const [selectedFiles, setSelectedFiles] = useState([])
   const [uploadState, setUploadState] = useState('idle')
   const [uploadError, setUploadError] = useState('')
+  const [fileNotice, setFileNotice] = useState('')
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false)
   const [progress, setProgress] = useState(0)
   const [activeMemory, setActiveMemory] = useState(null)
   const [filters, setFilters] = useState({ query: '', moment: 'Todos', table: '' })
@@ -96,6 +154,22 @@ function App() {
     moment: 'Ceremonia',
     consent: false,
   })
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return
+
+    supabase.auth.getSession().then(({ data }) => {
+      setIsAdmin(Boolean(data.session))
+      if (data.session?.user?.email) setLoginEmail(data.session.user.email)
+    })
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAdmin(Boolean(session))
+      if (session?.user?.email) setLoginEmail(session.user.email)
+    })
+
+    return () => listener.subscription.unsubscribe()
+  }, [])
 
   useEffect(() => {
     if (!isSupabaseConfigured) return
@@ -149,19 +223,69 @@ function App() {
     }
   }, [memories])
 
-  function handleFiles(files) {
-    const accepted = Array.from(files).filter((file) =>
-      ['image/', 'video/'].some((type) => file.type.startsWith(type)),
-    )
+  async function handleFiles(files) {
+    setUploadError('')
+    setFileNotice('')
+    setUploadState('idle')
 
-    const previews = accepted.map((file) => ({
-      id: `${file.name}-${file.lastModified}-${crypto.randomUUID()}`,
-      file,
-      previewUrl: URL.createObjectURL(file),
-      type: file.type.startsWith('video/') ? 'video' : 'image',
-    }))
+    const incomingFiles = Array.from(files)
+    const availableSlots = maxFilesPerUpload - selectedFiles.length
 
-    setSelectedFiles((current) => [...current, ...previews])
+    if (availableSlots <= 0) {
+      setUploadError(`Solo puedes subir hasta ${maxFilesPerUpload} archivos por vez.`)
+      return
+    }
+
+    const notices = []
+    const accepted = []
+
+    if (incomingFiles.length > availableSlots) {
+      notices.push(`Se tomaron ${availableSlots} archivos porque el maximo por subida es ${maxFilesPerUpload}.`)
+    }
+
+    for (const file of incomingFiles.slice(0, availableSlots)) {
+      const isImage = file.type.startsWith('image/')
+      const isVideo = file.type.startsWith('video/')
+
+      if (!isImage && !isVideo) {
+        notices.push(`${file.name} no es una foto o video permitido.`)
+        continue
+      }
+
+      if (isVideo && file.size > maxVideoSize) {
+        notices.push(`${file.name} pesa ${formatFileSize(file.size)}. El limite para videos es 100 MB.`)
+        continue
+      }
+
+      let processedFile = file
+
+      if (isImage) {
+        try {
+          processedFile = await compressImage(file)
+          if (processedFile.size < file.size) {
+            notices.push(`${file.name} fue comprimida de ${formatFileSize(file.size)} a ${formatFileSize(processedFile.size)}.`)
+          }
+        } catch (error) {
+          notices.push(`${file.name} no se pudo comprimir. Se intentara subir el archivo original.`)
+        }
+
+        if (processedFile.size > maxPhotoSize) {
+          notices.push(`${file.name} pesa ${formatFileSize(processedFile.size)}. El limite para fotos es 10 MB.`)
+          continue
+        }
+      }
+
+      accepted.push({
+        id: `${processedFile.name}-${processedFile.lastModified}-${crypto.randomUUID()}`,
+        file: processedFile,
+        originalName: file.name,
+        previewUrl: URL.createObjectURL(processedFile),
+        type: isVideo ? 'video' : 'image',
+      })
+    }
+
+    if (notices.length > 0) setFileNotice(notices.join(' '))
+    setSelectedFiles((current) => [...current, ...accepted])
   }
 
   function removeSelectedFile(id) {
@@ -220,6 +344,7 @@ function App() {
               mime_type: item.file.type,
               size_bytes: item.file.size,
               public_url: publicFile.publicUrl,
+              approved: false,
             })
             .select('*')
             .single()
@@ -259,6 +384,7 @@ function App() {
             type: item.type,
             previewUrl: item.previewUrl,
             accent: item.type === 'video' ? 'olive' : 'champagne',
+            approved: false,
           }))
           setMemories((current) => [...uploaded, ...current])
           setSelectedFiles([])
@@ -272,8 +398,25 @@ function App() {
     }, 220)
   }
 
-  function handleLogin(event) {
+  async function handleLogin(event) {
     event.preventDefault()
+
+    if (isSupabaseConfigured) {
+      setLoginError('')
+      const { error } = await supabase.auth.signInWithPassword({
+        email: loginEmail.trim(),
+        password: loginPassword,
+      })
+
+      if (error) {
+        setLoginError('No pudimos iniciar sesion. Revisa el correo y la contraseña del admin.')
+        return
+      }
+
+      setLoginPassword('')
+      setIsAdmin(true)
+      return
+    }
 
     if (loginCode.trim().toLowerCase() === privateCode) {
       setIsAdmin(true)
@@ -282,6 +425,13 @@ function App() {
     }
 
     setLoginError(`Codigo incorrecto. Prueba con ${privateCode} para esta demo.`)
+  }
+
+  async function handleLogout() {
+    if (isSupabaseConfigured) await supabase.auth.signOut()
+    setIsAdmin(false)
+    setLoginCode('')
+    setLoginPassword('')
   }
 
   function downloadMemory(memory) {
@@ -320,6 +470,62 @@ function App() {
     setActiveMemory(null)
   }
 
+  async function updateMemoryApproval(id, approved) {
+    if (isSupabaseConfigured) {
+      const { error } = await supabase
+        .from('wedding_memories')
+        .update({ approved })
+        .eq('id', id)
+
+      if (error) {
+        setUploadError(`No se pudo actualizar la moderacion: ${error.message}`)
+        return
+      }
+    }
+
+    setMemories((current) => current.map((memory) => (
+      memory.id === id ? { ...memory, approved } : memory
+    )))
+    setActiveMemory((current) => (
+      current?.id === id ? { ...current, approved } : current
+    ))
+  }
+
+  async function downloadAllMemories(list = memories) {
+    const downloadable = list.filter((memory) => memory.previewUrl)
+    if (downloadable.length === 0) {
+      setUploadError('No hay archivos disponibles para descargar.')
+      return
+    }
+
+    setIsDownloadingZip(true)
+    setUploadError('')
+
+    try {
+      const zip = new JSZip()
+
+      for (const [index, memory] of downloadable.entries()) {
+        const response = await fetch(memory.previewUrl)
+        if (!response.ok) throw new Error(`No se pudo descargar ${memory.fileName}.`)
+        const blob = await response.blob()
+        const safeGuest = getSafeFileName(memory.guestName || 'invitado')
+        zip.file(`${String(index + 1).padStart(3, '0')}-${safeGuest}-${getSafeFileName(memory.fileName)}`, blob)
+      }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' })
+      const url = URL.createObjectURL(zipBlob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'kevin-karen-recuerdos.zip'
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      setUploadError(`No pudimos crear el ZIP. ${error.message}`)
+    } finally {
+      setIsDownloadingZip(false)
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -341,6 +547,9 @@ function App() {
           <button className={view === 'live' ? 'active' : ''} onClick={() => setView('live')}>
             En vivo
           </button>
+          <button className={view === 'qr' ? 'active' : ''} onClick={() => setView('qr')}>
+            QR
+          </button>
           <a href={invitationUrl} target="_blank" rel="noreferrer">
             Invitacion
           </a>
@@ -359,6 +568,7 @@ function App() {
           submitUpload={submitUpload}
           uploadState={uploadState}
           uploadError={uploadError}
+          fileNotice={fileNotice}
           progress={progress}
         />
       )}
@@ -368,20 +578,30 @@ function App() {
           isAdmin={isAdmin}
           loginCode={loginCode}
           setLoginCode={setLoginCode}
+          loginEmail={loginEmail}
+          setLoginEmail={setLoginEmail}
+          loginPassword={loginPassword}
+          setLoginPassword={setLoginPassword}
           loginError={loginError}
           handleLogin={handleLogin}
+          handleLogout={handleLogout}
           stats={stats}
           isLoadingMemories={isLoadingMemories}
           uploadError={uploadError}
+          isDownloadingZip={isDownloadingZip}
           filters={filters}
           setFilters={setFilters}
           filteredMemories={filteredMemories}
           setActiveMemory={setActiveMemory}
           downloadMemory={downloadMemory}
+          downloadAllMemories={downloadAllMemories}
+          updateMemoryApproval={updateMemoryApproval}
         />
       )}
 
       {view === 'live' && <LiveView memories={memories} />}
+
+      {view === 'qr' && <QrView />}
 
       {activeMemory && (
         <MemoryModal
@@ -389,6 +609,8 @@ function App() {
           onClose={() => setActiveMemory(null)}
           onDownload={() => downloadMemory(activeMemory)}
           onDelete={() => deleteMemory(activeMemory.id)}
+          onApprove={() => updateMemoryApproval(activeMemory.id, true)}
+          onHide={() => updateMemoryApproval(activeMemory.id, false)}
         />
       )}
     </main>
@@ -473,6 +695,7 @@ function UploadView({
   submitUpload,
   uploadState,
   uploadError,
+  fileNotice,
   progress,
 }) {
   return (
@@ -488,6 +711,11 @@ function UploadView({
           {isSupabaseConfigured
             ? 'Supabase conectado: las fotos se guardaran en la nube.'
             : 'Modo demo: configura Supabase para guardar fotos reales.'}
+        </div>
+
+        <div className="limit-note">
+          Maximo {maxFilesPerUpload} archivos por subida. Fotos hasta 10 MB y videos hasta 100 MB.
+          Las fotos grandes se comprimen automaticamente antes de subir.
         </div>
 
         <div className="upload-intro-grid">
@@ -578,6 +806,8 @@ function UploadView({
           </div>
         )}
 
+        {fileNotice && <div className="notice-message">{fileNotice}</div>}
+
         {uploadState === 'uploading' && (
           <div className="progress-block" aria-live="polite">
             <span>Subiendo recuerdos...</span>
@@ -587,7 +817,8 @@ function UploadView({
 
         {uploadState === 'success' && (
           <div className="success-message">
-            Gracias por ser parte de nuestra historia. Tu recuerdo ya fue guardado para Kevin & Karen.
+            Gracias por ser parte de nuestra historia. Tu recuerdo ya fue guardado para Kevin & Karen
+            y quedara pendiente de revision antes de mostrarse en la galeria en vivo.
           </div>
         )}
 
@@ -624,16 +855,24 @@ function AdminView({
   isAdmin,
   loginCode,
   setLoginCode,
+  loginEmail,
+  setLoginEmail,
+  loginPassword,
+  setLoginPassword,
   loginError,
   handleLogin,
+  handleLogout,
   stats,
   isLoadingMemories,
   uploadError,
+  isDownloadingZip,
   filters,
   setFilters,
   filteredMemories,
   setActiveMemory,
   downloadMemory,
+  downloadAllMemories,
+  updateMemoryApproval,
 }) {
   if (!isAdmin) {
     return (
@@ -641,16 +880,37 @@ function AdminView({
         <form className="login-card" onSubmit={handleLogin}>
           <span className="eyebrow">Acceso privado</span>
           <h2>Panel de los novios</h2>
-          <p>Ingresa el codigo privado para revisar, filtrar y descargar todos los recuerdos de Kevin & Karen.</p>
-          <input
-            type="password"
-            value={loginCode}
-            onChange={(event) => setLoginCode(event.target.value)}
-            placeholder="Codigo privado"
-          />
+          <p>
+            {isSupabaseConfigured
+              ? 'Ingresa con el usuario administrador creado en Supabase Auth.'
+              : 'Ingresa el codigo privado para revisar, filtrar y descargar todos los recuerdos de Kevin & Karen.'}
+          </p>
+          {isSupabaseConfigured ? (
+            <>
+              <input
+                type="email"
+                value={loginEmail}
+                onChange={(event) => setLoginEmail(event.target.value)}
+                placeholder="Correo administrador"
+              />
+              <input
+                type="password"
+                value={loginPassword}
+                onChange={(event) => setLoginPassword(event.target.value)}
+                placeholder="Contraseña"
+              />
+            </>
+          ) : (
+            <input
+              type="password"
+              value={loginCode}
+              onChange={(event) => setLoginCode(event.target.value)}
+              placeholder="Codigo privado"
+            />
+          )}
           {loginError && <span className="field-error">{loginError}</span>}
           <button className="primary-button full">Entrar al panel</button>
-          <small>Demo: {privateCode}</small>
+          {!isSupabaseConfigured && <small>Demo: {privateCode}</small>}
         </form>
       </section>
     )
@@ -663,13 +923,19 @@ function AdminView({
           <span className="eyebrow">Galeria privada</span>
           <h2>Panel de recuerdos</h2>
         </div>
-        <button className="secondary-button">Descargar todo en ZIP</button>
+        <div className="admin-actions">
+          <button className="secondary-button" onClick={() => downloadAllMemories(filteredMemories)} disabled={isDownloadingZip}>
+            {isDownloadingZip ? 'Preparando ZIP...' : 'Descargar ZIP'}
+          </button>
+          <button className="secondary-button" onClick={handleLogout}>Salir</button>
+        </div>
       </div>
 
       <div className="stats-grid">
         <Stat title="Fotos" value={stats.photos} />
         <Stat title="Videos" value={stats.videos} />
         <Stat title="Invitados" value={stats.guests} />
+        <Stat title="Pendientes" value={stats.pending} />
         <Stat title="Ultima subida" value={stats.latest ? formatDate(stats.latest.uploadedAt) : 'Sin datos'} />
       </div>
 
@@ -721,6 +987,8 @@ function AdminView({
               memory={memory}
               onOpen={() => setActiveMemory(memory)}
               onDownload={() => downloadMemory(memory)}
+              onApprove={() => updateMemoryApproval(memory.id, true)}
+              onHide={() => updateMemoryApproval(memory.id, false)}
             />
           ))}
         </div>
@@ -738,15 +1006,18 @@ function Stat({ title, value }) {
   )
 }
 
-function MemoryCard({ memory, onOpen, onDownload }) {
+function MemoryCard({ memory, onOpen, onDownload, onApprove, onHide }) {
   return (
-    <article className="memory-card">
+    <article className={`memory-card ${memory.approved ? 'approved' : 'pending'}`}>
       <button className={`memory-media ${memory.accent || ''}`} onClick={onOpen}>
         {memory.previewUrl && memory.type === 'image' && <img src={memory.previewUrl} alt={memory.fileName} />}
         {memory.previewUrl && memory.type === 'video' && <video src={memory.previewUrl} muted />}
         {!memory.previewUrl && <span>{memory.type === 'video' ? 'Video' : 'Foto'}</span>}
       </button>
       <div className="memory-info">
+        <span className={`status-pill ${memory.approved ? 'approved' : 'pending'}`}>
+          {memory.approved ? 'Aprobado' : 'Pendiente'}
+        </span>
         <strong>{memory.guestName}</strong>
         <span>{memory.table} · {memory.relation}</span>
         <span>{memory.moment}</span>
@@ -755,12 +1026,17 @@ function MemoryCard({ memory, onOpen, onDownload }) {
       <div className="card-actions">
         <button onClick={onOpen}>Ver</button>
         <button onClick={onDownload} disabled={!memory.previewUrl}>Descargar</button>
+        {memory.approved ? (
+          <button onClick={onHide}>Ocultar</button>
+        ) : (
+          <button onClick={onApprove}>Aprobar</button>
+        )}
       </div>
     </article>
   )
 }
 
-function MemoryModal({ memory, onClose, onDownload, onDelete }) {
+function MemoryModal({ memory, onClose, onDownload, onDelete, onApprove, onHide }) {
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true">
       <article className="modal-card">
@@ -778,8 +1054,14 @@ function MemoryModal({ memory, onClose, onDownload, onDelete }) {
             <div><dt>Mesa</dt><dd>{memory.table}</dd></div>
             <div><dt>Relacion</dt><dd>{memory.relation}</dd></div>
             <div><dt>Momento</dt><dd>{memory.moment}</dd></div>
+            <div><dt>Estado</dt><dd>{memory.approved ? 'Aprobado' : 'Pendiente'}</dd></div>
             <div><dt>Fecha y hora</dt><dd>{formatDate(memory.uploadedAt)}</dd></div>
           </dl>
+          {memory.approved ? (
+            <button className="secondary-button full" onClick={onHide}>Ocultar de galeria en vivo</button>
+          ) : (
+            <button className="secondary-button full" onClick={onApprove}>Aprobar para galeria en vivo</button>
+          )}
           <button className="primary-button full" onClick={onDownload} disabled={!memory.previewUrl}>
             Descargar archivo
           </button>
@@ -791,7 +1073,7 @@ function MemoryModal({ memory, onClose, onDownload, onDelete }) {
 }
 
 function LiveView({ memories }) {
-  const latest = memories.slice(0, 6)
+  const latest = memories.filter((memory) => memory.approved).slice(0, 6)
 
   return (
     <section className="live-screen">
@@ -800,15 +1082,40 @@ function LiveView({ memories }) {
         <h2>Recuerdos apareciendo durante la fiesta</h2>
         <p>Modo ideal para una TV con moderacion previa antes de publicar.</p>
       </div>
-      <div className="live-wall">
-        {latest.map((memory, index) => (
-          <article key={memory.id} className={`live-tile ${memory.accent || ''}`} style={{ '--delay': `${index * 80}ms` }}>
-            {memory.previewUrl && memory.type === 'image' && <img src={memory.previewUrl} alt={memory.fileName} />}
-            {memory.previewUrl && memory.type === 'video' && <video src={memory.previewUrl} muted autoPlay loop />}
-            {!memory.previewUrl && <span>{memory.type === 'video' ? 'Video' : 'Foto'}</span>}
-            <strong>{memory.guestName}</strong>
-          </article>
-        ))}
+      {latest.length === 0 ? (
+        <div className="live-empty">Aun no hay recuerdos aprobados para mostrar.</div>
+      ) : (
+        <div className="live-wall">
+          {latest.map((memory, index) => (
+            <article key={memory.id} className={`live-tile ${memory.accent || ''}`} style={{ '--delay': `${index * 80}ms` }}>
+              {memory.previewUrl && memory.type === 'image' && <img src={memory.previewUrl} alt={memory.fileName} />}
+              {memory.previewUrl && memory.type === 'video' && <video src={memory.previewUrl} muted autoPlay loop />}
+              {!memory.previewUrl && <span>{memory.type === 'video' ? 'Video' : 'Foto'}</span>}
+              <strong>{memory.guestName}</strong>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function QrView() {
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=420x420&margin=18&data=${encodeURIComponent(publicMemoryUrl)}`
+
+  return (
+    <section className="qr-screen">
+      <div className="qr-print-card">
+        <span className="brand-mark large">K&K</span>
+        <span className="eyebrow">Kevin & Karen · {weddingDate}</span>
+        <h2>Comparte tus recuerdos</h2>
+        <p>Escanea este codigo y sube las fotos o videos que tomaste durante nuestra boda.</p>
+        <img className="qr-image" src={qrUrl} alt="QR para subir recuerdos" />
+        <strong>{memoryDomain}</strong>
+        <div className="qr-actions">
+          <a className="primary-button" href={qrUrl} download="qr-kevin-karen.png">Descargar QR</a>
+          <button className="secondary-button" onClick={() => window.print()}>Imprimir</button>
+        </div>
       </div>
     </section>
   )

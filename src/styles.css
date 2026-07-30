@@ -126,6 +126,13 @@ button:disabled {
   right: 8px;
 }
 
+.brand-mark.large {
+  width: 74px;
+  height: 74px;
+  margin: 0 auto;
+  font-size: 28px;
+}
+
 .brand small,
 .secure-note,
 .section-heading p,
@@ -175,6 +182,10 @@ button:disabled {
 .admin-layout,
 .login-screen,
 .live-screen {
+  margin-top: 40px;
+}
+
+.qr-screen {
   margin-top: 40px;
 }
 
@@ -299,6 +310,13 @@ h3 {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+}
+
+.admin-actions,
+.qr-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .primary-button,
@@ -646,7 +664,10 @@ select:focus {
 .success-message,
 .empty-state,
 .integration-status,
-.error-message {
+.error-message,
+.notice-message,
+.limit-note,
+.live-empty {
   border: 1px solid rgba(104, 114, 93, 0.28);
   border-radius: 22px;
   background: rgba(169, 181, 155, 0.2);
@@ -674,6 +695,14 @@ select:focus {
   border-color: rgba(154, 75, 63, 0.35);
   background: rgba(154, 75, 63, 0.12);
   color: #8a332b;
+}
+
+.notice-message,
+.limit-note {
+  border-color: rgba(185, 154, 95, 0.34);
+  background: rgba(185, 154, 95, 0.12);
+  color: #6f5430;
+  font-size: 0.9rem;
 }
 
 .consent-row {
@@ -726,7 +755,7 @@ select:focus {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 14px;
 }
 
@@ -765,6 +794,10 @@ select:focus {
   border-radius: 26px;
 }
 
+.memory-card.pending {
+  border-color: rgba(185, 154, 95, 0.42);
+}
+
 .memory-media {
   display: grid;
   width: 100%;
@@ -799,6 +832,26 @@ select:focus {
   display: grid;
   gap: 5px;
   padding: 16px 16px 0;
+}
+
+.status-pill {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.status-pill.approved {
+  background: rgba(169, 181, 155, 0.28);
+  color: var(--olive-dark);
+}
+
+.status-pill.pending {
+  background: rgba(185, 154, 95, 0.18);
+  color: #6f5430;
 }
 
 .card-actions {
@@ -925,6 +978,80 @@ dd {
   font-size: 3rem;
 }
 
+.live-empty {
+  display: grid;
+  min-height: 260px;
+  place-items: center;
+  color: var(--paper);
+  border-color: rgba(255, 248, 237, 0.22);
+  background: rgba(255, 248, 237, 0.08);
+  text-align: center;
+}
+
+.qr-screen {
+  display: grid;
+  place-items: center;
+}
+
+.qr-print-card {
+  width: min(560px, 100%);
+  padding: clamp(26px, 5vw, 48px);
+  border: 1px solid rgba(104, 114, 93, 0.22);
+  border-radius: 34px;
+  background:
+    radial-gradient(circle at top, rgba(169, 181, 155, 0.22), transparent 18rem),
+    rgba(255, 248, 237, 0.9);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.qr-print-card h2 {
+  margin-top: 18px;
+}
+
+.qr-print-card p {
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.qr-image {
+  width: min(320px, 82vw);
+  margin: 18px auto;
+  padding: 14px;
+  border: 1px solid rgba(104, 114, 93, 0.2);
+  border-radius: 24px;
+  background: var(--white);
+}
+
+.qr-actions {
+  justify-content: center;
+  margin-top: 18px;
+}
+
+@media print {
+  body {
+    background: var(--paper);
+  }
+
+  .topbar,
+  .hero,
+  .upload-layout,
+  .admin-layout,
+  .live-screen {
+    display: none !important;
+  }
+
+  .app-shell {
+    width: 100%;
+    padding: 0;
+  }
+
+  .qr-print-card {
+    box-shadow: none;
+    border-color: var(--olive);
+  }
+}
+
 @keyframes floatIn {
   from {
     opacity: 0;
@@ -948,6 +1075,7 @@ dd {
 
   .steps,
   .stats-grid,
+  .upload-intro-grid,
   .filters-card {
     grid-template-columns: 1fr 1fr;
   }
@@ -976,11 +1104,12 @@ dd {
 
   .nav-actions {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     padding: 0;
   }
 
-  .nav-actions button {
+  .nav-actions button,
+  .nav-actions a {
     padding-inline: 10px;
   }
 
@@ -988,12 +1117,36 @@ dd {
     min-height: auto;
   }
 
+  .section-grid,
+  .upload-layout,
+  .admin-layout,
+  .login-screen,
+  .live-screen,
+  .qr-screen {
+    margin-top: 18px;
+  }
+
   .hero-copy {
-    padding: 24px;
+    padding: 20px;
+  }
+
+  .hero-copy blockquote,
+  .steps {
+    display: none;
+  }
+
+  h1 {
+    font-size: clamp(2.8rem, 16vw, 4.2rem);
+  }
+
+  h2 {
+    font-size: clamp(2.2rem, 12vw, 3.4rem);
   }
 
   .hero-actions,
   .split-heading,
+  .admin-actions,
+  .qr-actions,
   .form-grid,
   .upload-intro-grid,
   .steps,
@@ -1009,7 +1162,7 @@ dd {
   }
 
   .hero-visual {
-    min-height: 470px;
+    min-height: 390px;
   }
 
   .photo-frame {

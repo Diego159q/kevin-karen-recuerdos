@@ -37,7 +37,7 @@ create table if not exists public.wedding_memories (
   mime_type text,
   size_bytes bigint,
   public_url text not null,
-  approved boolean not null default true,
+  approved boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -57,12 +57,20 @@ for insert
 to anon, authenticated
 with check (true);
 
--- Practico para la primera version. En produccion conviene proteger delete con login real.
 drop policy if exists "Public can delete wedding memories" on public.wedding_memories;
-create policy "Public can delete wedding memories"
+drop policy if exists "Admins can update wedding memories" on public.wedding_memories;
+create policy "Admins can update wedding memories"
+on public.wedding_memories
+for update
+to authenticated
+using (true)
+with check (true);
+
+drop policy if exists "Admins can delete wedding memories" on public.wedding_memories;
+create policy "Admins can delete wedding memories"
 on public.wedding_memories
 for delete
-to anon, authenticated
+to authenticated
 using (true);
 
 drop policy if exists "Public can read wedding memory files" on storage.objects;
@@ -79,12 +87,12 @@ for insert
 to anon, authenticated
 with check (bucket_id = 'wedding-memories');
 
--- Practico para la primera version. En produccion conviene proteger delete con login real.
 drop policy if exists "Public can delete wedding memory files" on storage.objects;
-create policy "Public can delete wedding memory files"
+drop policy if exists "Admins can delete wedding memory files" on storage.objects;
+create policy "Admins can delete wedding memory files"
 on storage.objects
 for delete
-to anon, authenticated
+to authenticated
 using (bucket_id = 'wedding-memories');
 
 create index if not exists wedding_memories_created_at_idx
