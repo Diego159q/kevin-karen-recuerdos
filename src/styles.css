@@ -1028,6 +1028,300 @@ dd {
   margin-top: 18px;
 }
 
+/* ========== TOAST ========== */
+.toast-container {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  z-index: 100;
+  display: grid;
+  gap: 10px;
+  width: min(480px, calc(100% - 32px));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: 18px;
+  background: rgba(36, 27, 22, 0.92);
+  backdrop-filter: blur(12px);
+  color: #fff;
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.5;
+  pointer-events: auto;
+  animation: toastIn 350ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.toast.success { background: rgba(63, 74, 56, 0.95); }
+.toast.error { background: rgba(143, 60, 53, 0.95); }
+
+.toast-exit {
+  animation: toastOut 300ms ease both;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-20px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes toastOut {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-20px) scale(0.95); }
+}
+
+/* ========== SKELETON LOADING ========== */
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 16px;
+}
+
+.skeleton-card {
+  overflow: hidden;
+  border-radius: 26px;
+  border: 1px solid rgba(104, 114, 93, 0.2);
+  background: rgba(255, 248, 237, 0.78);
+  box-shadow: var(--shadow);
+}
+
+.skeleton-media {
+  width: 100%;
+  height: 230px;
+  background: linear-gradient(135deg, var(--sage), var(--olive-dark));
+}
+
+.skeleton-body {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+}
+
+.skeleton-line {
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(104, 114, 93, 0.14);
+  overflow: hidden;
+  position: relative;
+}
+
+.skeleton-line:first-child { width: 55%; }
+.skeleton-line:nth-child(2) { width: 80%; }
+.skeleton-line:nth-child(3) { width: 40%; }
+
+.skeleton-line::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* ========== PAGE TRANSITIONS ========== */
+.page-section {
+  animation: pageEnter 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.stagger-item {
+  animation: staggerIn 450ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--delay);
+}
+
+@keyframes staggerIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ========== CARD HOVER EFFECTS ========== */
+.memory-card {
+  transition: transform 350ms cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 350ms ease;
+  will-change: transform;
+}
+
+.memory-card:hover {
+  transform: translateY(-6px) scale(1.01);
+  box-shadow: 0 32px 80px rgba(40, 54, 34, 0.2);
+}
+
+.memory-media img,
+.memory-media video {
+  transition: transform 400ms ease;
+}
+
+.memory-card:hover .memory-media img,
+.memory-card:hover .memory-media video {
+  transform: scale(1.06);
+}
+
+.card-actions button {
+  transition: all 200ms ease;
+}
+
+.card-actions button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+/* ========== LIGHTBOX IMPROVEMENT ========== */
+.modal-backdrop {
+  animation: backdropIn 300ms ease both;
+}
+
+@keyframes backdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-card {
+  animation: modalIn 350ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.92) translateY(20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ========== MASONRY LAYOUT ========== */
+.memory-grid.masonry {
+  columns: 3;
+  column-gap: 16px;
+}
+
+.memory-grid.masonry .memory-card {
+  display: inline-grid;
+  width: 100%;
+  margin-bottom: 16px;
+  break-inside: avoid;
+}
+
+@media (max-width: 920px) {
+  .memory-grid.masonry { columns: 2; }
+}
+
+@media (max-width: 680px) {
+  .memory-grid.masonry { columns: 1; }
+}
+
+/* ========== LIVE WALL ENHANCEMENTS ========== */
+.live-tile {
+  transition: transform 300ms ease, box-shadow 300ms ease;
+}
+
+.live-tile:hover {
+  transform: scale(1.03);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+  z-index: 2;
+}
+
+.live-header .eyebrow::after {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #5bcc6b;
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+/* ========== QR PAGE TWEAK ========== */
+.qr-print-card {
+  animation: pageEnter 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.qr-image {
+  transition: transform 300ms ease, box-shadow 300ms ease;
+}
+
+.qr-image:hover {
+  transform: scale(1.02);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+/* ========== SLIDESHOW ========== */
+.live-slideshow {
+  position: relative;
+  width: 100%;
+  height: 560px;
+  border-radius: 28px;
+  overflow: hidden;
+  background: #1a1f18;
+}
+
+.live-slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 800ms ease;
+  pointer-events: none;
+}
+
+.live-slide.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.live-slide img,
+.live-slide video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.live-slide-info {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+  color: #fff;
+}
+
+.live-slide-info strong {
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.live-slide-info span {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.85rem;
+}
+
+/* ========== ACCESSIBILITY ========== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 @media print {
   body {
     background: var(--paper);

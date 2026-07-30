@@ -149,6 +149,18 @@ function App() {
   const [progress, setProgress] = useState(0)
   const [activeMemory, setActiveMemory] = useState(null)
   const [filters, setFilters] = useState({ query: '', moment: 'Todos', table: '' })
+  const [toasts, setToasts] = useState([])
+
+  function addToast(message, type = 'info') {
+    const id = crypto.randomUUID()
+    setToasts((current) => [...current, { id, message, type }])
+    setTimeout(() => {
+      setToasts((current) => current.map((t) => t.id === id ? { ...t, exiting: true } : t))
+      setTimeout(() => {
+        setToasts((current) => current.filter((t) => t.id !== id))
+      }, 300)
+    }, 3500)
+  }
   const [form, setForm] = useState({
     guestName: '',
     table: '',
@@ -362,10 +374,12 @@ function App() {
         setSelectedFiles([])
         setProgress(100)
         setUploadState('success')
+        addToast('Tus recuerdos se subieron correctamente. Gracias.', 'success')
         setForm({ guestName: '', table: '', relation: '', moment: 'Ceremonia', consent: false })
       } catch (error) {
         setUploadState('error')
         setUploadError(`No pudimos subir tus recuerdos. ${error.message}`)
+        addToast('Error al subir los archivos.', 'error')
       }
 
       return
@@ -391,6 +405,7 @@ function App() {
           setMemories((current) => [...uploaded, ...current])
           setSelectedFiles([])
           setUploadState('success')
+          addToast('Tus recuerdos se subieron correctamente. Gracias.', 'success')
           setForm({ guestName: '', table: '', relation: '', moment: 'Ceremonia', consent: false })
           return 100
         }
@@ -558,9 +573,14 @@ function App() {
         </nav>
       </header>
 
-      {view === 'home' && <HomeView onStart={() => setView('upload')} />}
+      {view === 'home' && (
+        <div className="page-section" style={{ '--delay': '0ms' }}>
+          <HomeView onStart={() => setView('upload')} />
+        </div>
+      )}
 
       {view === 'upload' && (
+        <div className="page-section" style={{ '--delay': '50ms' }}>
         <UploadView
           form={form}
           setForm={setForm}
@@ -573,9 +593,11 @@ function App() {
           fileNotice={fileNotice}
           progress={progress}
         />
+      </div>
       )}
 
       {view === 'admin' && (
+        <div className="page-section" style={{ '--delay': '50ms' }}>
         <AdminView
           isAdmin={isAdmin}
           loginCode={loginCode}
@@ -599,11 +621,20 @@ function App() {
           downloadAllMemories={downloadAllMemories}
           updateMemoryApproval={updateMemoryApproval}
         />
+      </div>
       )}
 
-      {view === 'live' && <LiveView memories={memories} />}
+      {view === 'live' && (
+        <div className="page-section" style={{ '--delay': '50ms' }}>
+          <LiveView memories={memories} />
+        </div>
+      )}
 
-      {view === 'qr' && <QrView />}
+      {view === 'qr' && (
+        <div className="page-section" style={{ '--delay': '50ms' }}>
+          <QrView />
+        </div>
+      )}
 
       {activeMemory && (
         <MemoryModal
@@ -614,6 +645,16 @@ function App() {
           onApprove={() => updateMemoryApproval(activeMemory.id, true)}
           onHide={() => updateMemoryApproval(activeMemory.id, false)}
         />
+      )}
+
+      {toasts.length > 0 && (
+        <div className="toast-container" aria-live="polite">
+          {toasts.map((toast) => (
+            <div key={toast.id} className={`toast ${toast.type}${toast.exiting ? ' toast-exit' : ''}`}>
+              {toast.message}
+            </div>
+          ))}
+        </div>
       )}
     </main>
   )
@@ -972,9 +1013,17 @@ function AdminView({
       </div>
 
       {isLoadingMemories ? (
-        <div className="empty-state">
-          <span>Cargando recuerdos</span>
-          <p>Estamos consultando la galeria privada en Supabase.</p>
+        <div className="skeleton-grid">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="skeleton-card stagger-item" style={{ '--delay': `${i * 60}ms` }}>
+              <div className="skeleton-media" />
+              <div className="skeleton-body">
+                <div className="skeleton-line" />
+                <div className="skeleton-line" />
+                <div className="skeleton-line" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : filteredMemories.length === 0 ? (
         <div className="empty-state">
@@ -982,16 +1031,17 @@ function AdminView({
           <p>Cuando tus invitados suban fotos, apareceran aqui.</p>
         </div>
       ) : (
-        <div className="memory-grid">
-          {filteredMemories.map((memory) => (
-            <MemoryCard
-              key={memory.id}
-              memory={memory}
-              onOpen={() => setActiveMemory(memory)}
-              onDownload={() => downloadMemory(memory)}
-              onApprove={() => updateMemoryApproval(memory.id, true)}
-              onHide={() => updateMemoryApproval(memory.id, false)}
-            />
+        <div className="memory-grid masonry">
+          {filteredMemories.map((memory, index) => (
+            <div key={memory.id} className="stagger-item" style={{ '--delay': `${index * 50}ms` }}>
+              <MemoryCard
+                memory={memory}
+                onOpen={() => onOpen(memory)}
+                onDownload={() => onDownload(memory)}
+                onApprove={() => onApprove(memory.id)}
+                onHide={() => onHide(memory.id)}
+              />
+            </div>
           ))}
         </div>
       )}
@@ -1039,9 +1089,21 @@ function MemoryCard({ memory, onOpen, onDownload, onApprove, onHide }) {
 }
 
 function MemoryModal({ memory, onClose, onDownload, onDelete, onApprove, onHide }) {
+  useEffect(() => {
+    function handleKey(event) {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKey)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', handleKey)
+      document.body.style.overflow = ''
+    }
+  }, [onClose])
+
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true">
-      <article className="modal-card">
+    <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={onClose}>
+      <article className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className={`modal-media ${memory.accent || ''}`}>
           {memory.previewUrl && memory.type === 'image' && <img src={memory.previewUrl} alt={memory.fileName} />}
           {memory.previewUrl && memory.type === 'video' && <video src={memory.previewUrl} controls />}
@@ -1075,7 +1137,17 @@ function MemoryModal({ memory, onClose, onDownload, onDelete, onApprove, onHide 
 }
 
 function LiveView({ memories }) {
+  const [slideshow, setSlideshow] = useState(false)
+  const [slideIndex, setSlideIndex] = useState(0)
   const latest = memories.filter((memory) => memory.approved).slice(0, 6)
+
+  useEffect(() => {
+    if (!slideshow || latest.length === 0) return
+    const timer = setInterval(() => {
+      setSlideIndex((current) => (current + 1) % latest.length)
+    }, 4000)
+    return () => clearInterval(timer)
+  }, [slideshow, latest.length])
 
   return (
     <section className="live-screen">
@@ -1083,13 +1155,38 @@ function LiveView({ memories }) {
         <span className="eyebrow">Galeria en vivo</span>
         <h2>Recuerdos apareciendo durante la fiesta</h2>
         <p>Modo ideal para una TV con moderacion previa antes de publicar.</p>
+        {latest.length > 1 && (
+          <button
+            className="secondary-button"
+            style={{ marginTop: '12px' }}
+            onClick={() => setSlideshow((s) => !s)}
+          >
+            {slideshow ? 'Detener slideshow' : 'Iniciar slideshow'}
+          </button>
+        )}
       </div>
       {latest.length === 0 ? (
         <div className="live-empty">Aun no hay recuerdos aprobados para mostrar.</div>
+      ) : slideshow ? (
+        <div className="live-slideshow">
+          {latest.map((memory, index) => (
+            <article
+              key={memory.id}
+              className={`live-slide ${index === slideIndex ? 'active' : ''}`}
+            >
+              {memory.previewUrl && memory.type === 'image' && <img src={memory.previewUrl} alt={memory.fileName} />}
+              {memory.previewUrl && memory.type === 'video' && <video src={memory.previewUrl} muted autoPlay loop />}
+              <div className="live-slide-info">
+                <strong>{memory.guestName}</strong>
+                <span>{memory.moment}</span>
+              </div>
+            </article>
+          ))}
+        </div>
       ) : (
         <div className="live-wall">
           {latest.map((memory, index) => (
-            <article key={memory.id} className={`live-tile ${memory.accent || ''}`} style={{ '--delay': `${index * 80}ms` }}>
+            <article key={memory.id} className={`live-tile ${memory.accent || ''} stagger-item`} style={{ '--delay': `${index * 80}ms` }}>
               {memory.previewUrl && memory.type === 'image' && <img src={memory.previewUrl} alt={memory.fileName} />}
               {memory.previewUrl && memory.type === 'video' && <video src={memory.previewUrl} muted autoPlay loop />}
               {!memory.previewUrl && <span>{memory.type === 'video' ? 'Video' : 'Foto'}</span>}
