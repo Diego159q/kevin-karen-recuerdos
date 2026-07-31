@@ -122,7 +122,8 @@ function App() {
     return {
       photos: memories.filter((memory) => memory.type === 'image').length,
       videos: memories.filter((memory) => memory.type === 'video').length,
-      pending: memories.filter((memory) => !memory.approved).length,
+      approved: memories.filter((memory) => memory.approved).length,
+      hidden: memories.filter((memory) => !memory.approved).length,
       guests,
       latest: memories
         .slice()
@@ -251,7 +252,7 @@ function App() {
               mime_type: item.file.type,
               size_bytes: item.file.size,
               public_url: publicFile.publicUrl,
-              approved: false,
+              approved: true,
             })
             .select('*')
             .single()
@@ -267,7 +268,7 @@ function App() {
         setSelectedFiles([])
         setProgress(100)
         setUploadState('success')
-        addToast('Tus recuerdos se subieron correctamente. Gracias.', 'success')
+        addToast('Tus recuerdos se subieron y ya estan publicados en la galeria en vivo.', 'success')
         setForm({ guestName: '', table: '', relation: '', moment: 'Ceremonia', consent: false })
       } catch (error) {
         setUploadState('error')
@@ -296,12 +297,12 @@ function App() {
             type: item.type,
             previewUrl: item.previewUrl,
             accent: item.type === 'video' ? 'olive' : 'champagne',
-            approved: false,
+            approved: true,
           }))
           setMemories((current) => [...uploaded, ...current])
           setSelectedFiles([])
           setUploadState('success')
-          addToast('Tus recuerdos se subieron correctamente. Gracias.', 'success')
+          addToast('Tus recuerdos se subieron y ya estan publicados en la galeria en vivo.', 'success')
           setForm({ guestName: '', table: '', relation: '', moment: 'Ceremonia', consent: false })
           return 100
         }

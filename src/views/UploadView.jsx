@@ -128,8 +128,8 @@ export function UploadView({ form, setForm, selectedFiles, handleFiles, removeSe
 
         {uploadState === 'success' && (
           <div className="success-message">
-            Gracias por ser parte de nuestra historia. Tu recuerdo ya fue guardado para Kevin & Karen
-            y quedara pendiente de revision antes de mostrarse en la galeria en vivo.
+            Gracias por ser parte de nuestra historia. Tu recuerdo ya fue guardado y publicado
+            en la galeria en vivo para Kevin & Karen.
           </div>
         )}
 

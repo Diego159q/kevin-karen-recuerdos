@@ -1,6 +1,5 @@
 import { isSupabaseConfigured } from '../supabaseClient'
 import { moments } from '../constants'
-import { formatDate } from '../utils/formatDate'
 import { Stat } from '../components/Stat'
 import { MemoryCard } from '../components/MemoryCard'
 
@@ -87,8 +86,8 @@ export function AdminView({
         <Stat title="Fotos" value={stats.photos} />
         <Stat title="Videos" value={stats.videos} />
         <Stat title="Invitados" value={stats.guests} />
-        <Stat title="Pendientes" value={stats.pending} />
-        <Stat title="Ultima subida" value={stats.latest ? formatDate(stats.latest.uploadedAt) : 'Sin datos'} />
+        <Stat title="En vivo" value={stats.approved} />
+        <Stat title="Ocultos" value={stats.hidden} />
       </div>
 
       <div className={`integration-status ${isSupabaseConfigured ? 'connected' : 'demo'}`}>

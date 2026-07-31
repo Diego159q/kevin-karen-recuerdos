@@ -36,7 +36,7 @@ export function MemoryModal({ memory, onClose, onDownload, onDelete, onApprove, 
     if (!busy) onClose()
   }
 
-  const approvalText = memory.approved ? 'Ocultar de galeria en vivo' : 'Aprobar para galeria en vivo'
+  const approvalText = memory.approved ? 'Ocultar de galeria en vivo' : 'Mostrar en galeria en vivo'
   const approvalBusy = busy === 'approve' || busy === 'hide'
 
   return (
@@ -56,7 +56,7 @@ export function MemoryModal({ memory, onClose, onDownload, onDelete, onApprove, 
             <div><dt>Mesa</dt><dd>{memory.table}</dd></div>
             <div><dt>Relacion</dt><dd>{memory.relation}</dd></div>
             <div><dt>Momento</dt><dd>{memory.moment}</dd></div>
-            <div><dt>Estado</dt><dd>{memory.approved ? 'Aprobado' : 'Pendiente'}</dd></div>
+            <div><dt>Estado</dt><dd>{memory.approved ? 'En vivo' : 'Oculto'}</dd></div>
             <div><dt>Fecha y hora</dt><dd>{formatDate(memory.uploadedAt)}</dd></div>
           </dl>
           <button

@@ -10,7 +10,7 @@ export function MemoryCard({ memory, onOpen, onDownload, onApprove, onHide }) {
       </button>
       <div className="memory-info">
         <span className={`status-pill ${memory.approved ? 'approved' : 'pending'}`}>
-          {memory.approved ? 'Aprobado' : 'Pendiente'}
+          {memory.approved ? 'En vivo' : 'Oculto'}
         </span>
         <strong>{memory.guestName}</strong>
         <span>{memory.table} · {memory.relation}</span>
@@ -23,7 +23,7 @@ export function MemoryCard({ memory, onOpen, onDownload, onApprove, onHide }) {
         {memory.approved ? (
           <button onClick={onHide}>Ocultar</button>
         ) : (
-          <button onClick={onApprove}>Aprobar</button>
+          <button onClick={onApprove}>Mostrar</button>
         )}
       </div>
     </article>
