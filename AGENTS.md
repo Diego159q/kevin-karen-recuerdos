@@ -49,22 +49,26 @@ src/
 ## Modelo de datos (Memory)
 ```js
 { id, guestName, table, relation, moment, uploadedAt, fileName, filePath,
-  type: 'image'|'video', previewUrl, accent: 'champagne'|'olive'|'rose', approved: boolean }
+  type: 'image'|'video', previewUrl, thumbUrl, accent: 'champagne'|'olive'|'rose', approved: boolean }
 ```
 
 ## Integración con Supabase
 - **Auth**: email/contraseña para el admin (`supabase.auth.signInWithPassword`). El estado de sesión se escucha con `onAuthStateChange`.
-- **Tabla** `wedding_memories`: columnas snake_case mapeadas por `mapSupabaseMemory` (guest_name→guestName, table_name→table, file_name→fileName, file_path→filePath, file_type→fileType, mime_type, size_bytes, public_url→previewUrl, approved, created_at→uploadedAt).
-- **Storage**: bucket `wedding-memories`, path `uploads/YYYY-MM-DD/uuid-nombre-sanitizado`, `cacheControl 3600`, sin upsert. Se guarda la `public_url` en la fila.
+- **Tabla** `wedding_memories`: columnas snake_case mapeadas por `mapSupabaseMemory` (guest_name→guestName, table_name→table, file_name→fileName, file_path→filePath, file_type→fileType, mime_type, size_bytes, public_url→previewUrl, thumb_url→thumbUrl, approved, created_at→uploadedAt).
+- **Storage**: bucket `wedding-memories`, path `uploads/YYYY-MM-DD/uuid-nombre-sanitizado`, `cacheControl 3600`, sin upsert. Se guarda la `public_url` en la fila. Las imágenes suben además una miniatura (~600px) en `thumbs/...` y se guarda `thumb_url`.
+- **Realtime**: suscripción `postgres_changes` en `wedding_memories` (INSERT/UPDATE/DELETE) → el estado `memories` se actualiza solo y aparece toast "Nuevo recuerdo". Los INSERT hechos por el propio cliente se silencian con `selfInsertedIdsRef`.
 - **Modo demo**: si no hay `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`, la app funciona con `seedMemories` en memoria y simula subidas con un timer.
 - El código debe acceder a `supabase` **solo tras verificar `isSupabaseConfigured`** (nunca asumir que no es `null`).
+- **Seguridad (RLS)**: `delete`/`update` de filas y `storage.remove` solo se ejecutan si `isSupabaseConfigured && isAdmin`. Las políticas SQL están en `supabase/policies.sql` (aplicar 1 vez en el SQL Editor): select/insert públicos, update/delete solo `authenticated`, y la tabla agregada a `supabase_realtime`.
 
 ## Reglas de subida de archivos
 - **Subida 100% anónima**: sin formulario. Solo se eligen archivos y se pulsa subir.
 - Máximo **20 archivos por lote** (`maxFilesPerUpload`).
 - Fotos: límite **10 MB** (`maxPhotoSize`). Videos: **100 MB** (`maxVideoSize`).
 - Imágenes JPEG/PNG/WebP > 10 MB se **comprimen automáticamente** con `compressImage`: escala a máx. 2200px y reexporta como JPEG calidad 0.82. Si la compresión no reduce tamaño, se usa el original.
+- Además se genera una **miniatura** (~600px, JPEG 0.75) con `createThumbnail` (en `compressImage.js`) para las grillas (`thumbUrl`). Las grillas usan `memory.thumbUrl || memory.previewUrl`.
 - Cada archivo aceptado recibe `id` único, `previewUrl` con `URL.createObjectURL` (revocado al quitar/seleccionar).
+- **Subida robusta**: los archivos se procesan uno a uno; los que fallan quedan en la lista para reintentar y los exitosos se quitan (no se duplican). El progreso por archivo usa `onUploadProgress` de storage.
 - Las subidas se guardan con valores por defecto: `guest_name: 'Anonimo'`, `table_name: 'Sin mesa'`, `relation: 'Invitado'`, `moment: 'Otro'`.
 - La UI de tarjetas/modal/galería **oculta los valores por defecto** ('Anonimo', 'Sin mesa', 'Invitado', 'Otro') para no mostrar ruido.
 
@@ -107,7 +111,19 @@ STITCH_API_KEY=tu_api_key_de_google_stitch            # no usada aún
 - Paginación o infinite scroll en el panel admin para muchas fotos.
 - Soporte para formatos de imagen modernos (AVIF/HEIC) en `compressImage`.
 - Descarga ZIP en paralelo con límite de concurrencia.
-- Error boundary global para que un fallo de vista no tumbe toda la app.
+
+## Robustez, seguridad y rendimiento (implementado, no revertir)
+1. **RLS (seguridad)**: `supabase/policies.sql` activa row level security: select/insert públicos, update/delete solo `authenticated` (admin logueado). Sin sesión no se puede ocultar/eliminar. Aplicar 1 vez en el SQL Editor de Supabase.
+2. **Realtime**: `postgres_changes` en `wedding_memories` → panel y live wall se actualizan solos (INSERT/UPDATE/DELETE). El toast de "Nuevo recuerdo" se silencia para subidas propias (`selfInsertedIdsRef`).
+3. **Subida robusta sin duplicados**: procesado archivo por archivo; los exitosos se quitan de la cola y los fallos quedan para reintentar con resumen por nombre.
+4. **Progreso real por archivo**: `onUploadProgress` de storage (antes era % simulado por índice).
+5. **Miniaturas**: `createThumbnail` (~600px) subida a `thumbs/...`; grillas usan `memory.thumbUrl || memory.previewUrl`. `preload="none"` en videos de grilla (el slideshow conserva autoplay).
+6. **`content-visibility: auto`** en `.memory-card`, `.preview-item`, `.live-tile`.
+7. **Error boundary global** (`ErrorBoundary.jsx`) envolviendo `<App/>` en `main.jsx`.
+8. **ESLint** (`eslint.config.js` flat, react-hooks + react-refresh): script `npm run lint`. Regla `react-hooks/refs` y `set-state-in-effect` activas: NO asignar `ref.current` en render ni `setState` síncrono en effects; usar efectos sin deps para "latest ref" y el patrón de reset de estado en render (comparar `memory.id !== lastMemoryId`).
+9. **`document.title` por vista** vía effect en `App.jsx`.
+10. **Focus trap + foco restaurado** en `MemoryModal` (Tab cíclico, foco al abrir y al navegar, `aria-label` "Recuerdo X de Y", foco vuelve al elemento anterior al cerrar).
+11. **`prefers-reduced-motion`**: desactiva Ken Burns, shimmer, splash-ring, checkDraw y animación de toasts/progreso.
 
 ## Mejoras visuales implementadas (no revertir)
 1. **Reveal on scroll** (`Reveal.jsx`): IntersectionObserver agrega `.reveal-visible` al entrar en el viewport. Respeta `prefers-reduced-motion` (el contenido se muestra siempre).
@@ -120,4 +136,6 @@ STITCH_API_KEY=tu_api_key_de_google_stitch            # no usada aún
 8. **Ken Burns + barra de progreso**: los slides activos animan zoom sutil (`kenBurns 9s`); la `.live-progress` (4s, claveada por `slideIndex`) se sincroniza con el auto-avance del slideshow.
 9. **Toast con iconos**: cada toast muestra icono según tipo (check/x/info) en `.toast-icon`.
 10. **Splash screen**: pantalla inicial con monograma K&K y anillos pulsantes; se desvanece sola (~2s) vía estado local en `SplashScreen.jsx`.
-11. **PWA**: `public/manifest.webmanifest`, `public/sw.js` (network-first con fallback a cache para requests del mismo origin), iconos PNG generados en `public/icons/`, registro en `main.jsx` y links en `index.html`. `theme_color` = `#3f4a38`.
+11. **PWA**: `public/manifest.webmanifest`, `public/sw.js` (stale-while-revalidate + fallback a `/index.html` en navegaciones offline), registro en `main.jsx` y links en `index.html`. `theme_color` = `#3f4a38`.
+12. **Instalar app**: hook `useBeforeInstallPrompt` captura `beforeinstallprompt` y muestra botón "Instalar app" en el hero de `HomeView`.
+13. **Iconos regenerables**: `scripts/gen-icons.js` (Node, sin deps) genera `public/icons/icon-{192,512}.png` (aro dorado sobre oliva). `public/icons/icon.svg` es el favicon con monograma K&K. Regenerar con `node scripts/gen-icons.js`.

@@ -10,6 +10,7 @@ export function mapSupabaseMemory(row) {
     filePath: row.file_path,
     type: row.file_type,
     previewUrl: row.public_url,
+    thumbUrl: row.thumb_url || null,
     accent: row.file_type === 'video' ? 'olive' : 'champagne',
     approved: row.approved,
   }

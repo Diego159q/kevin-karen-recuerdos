@@ -2,36 +2,72 @@ import { useEffect, useRef, useState } from 'react'
 import { formatDate } from '../utils/formatDate'
 import { Icon } from './Icons'
 
-export function MemoryModal({ memory, onClose, onDownload, onDelete, onApprove, onHide, onPrev, onNext, hasPrev, hasNext }) {
+export function MemoryModal({ memory, onClose, onDownload, onDelete, onApprove, onHide, onPrev, onNext, hasPrev, hasNext, position, total }) {
   const [busy, setBusy] = useState(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [lastMemoryId, setLastMemoryId] = useState(memory.id)
+  const cardRef = useRef(null)
   const onCloseRef = useRef(onClose)
-  onCloseRef.current = onClose
   const onPrevRef = useRef(onPrev)
-  onPrevRef.current = onPrev
   const onNextRef = useRef(onNext)
-  onNextRef.current = onNext
   const busyRef = useRef(busy)
-  busyRef.current = busy
+
+  if (memory.id !== lastMemoryId) {
+    setLastMemoryId(memory.id)
+    setConfirmingDelete(false)
+    setBusy(null)
+  }
 
   useEffect(() => {
+    onCloseRef.current = onClose
+    onPrevRef.current = onPrev
+    onNextRef.current = onNext
+  })
+
+  useEffect(() => {
+    busyRef.current = busy
+  })
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement
+    cardRef.current?.focus()
+
     function handleKey(event) {
+      if (event.key === 'Escape') {
+        if (!busyRef.current) onCloseRef.current()
+        return
+      }
       if (busyRef.current) return
-      if (event.key === 'Escape') onCloseRef.current()
       if (event.key === 'ArrowLeft') onPrevRef.current?.()
       if (event.key === 'ArrowRight') onNextRef.current?.()
+      if (event.key === 'Tab' && cardRef.current) {
+        const focusables = Array.from(
+          cardRef.current.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'),
+        ).filter((element) => !element.disabled && element.offsetParent !== null)
+        if (focusables.length === 0) return
+        const first = focusables[0]
+        const last = focusables[focusables.length - 1]
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault()
+          last.focus()
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault()
+          first.focus()
+        }
+      }
     }
+
     window.addEventListener('keydown', handleKey)
     document.body.style.overflow = 'hidden'
     return () => {
       window.removeEventListener('keydown', handleKey)
       document.body.style.overflow = ''
+      if (previouslyFocused?.focus) previouslyFocused.focus()
     }
   }, [])
 
   useEffect(() => {
-    setConfirmingDelete(false)
-    setBusy(null)
+    cardRef.current?.focus()
   }, [memory.id])
 
   async function runAction(action, callback) {
@@ -52,8 +88,8 @@ export function MemoryModal({ memory, onClose, onDownload, onDelete, onApprove, 
   const approvalBusy = busy === 'approve' || busy === 'hide'
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={handleClose}>
-      <article className="modal-card" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={`Recuerdo ${position} de ${total}`} onClick={handleClose}>
+      <article className="modal-card" tabIndex={-1} ref={cardRef} onClick={(e) => e.stopPropagation()}>
         <div className={`modal-media ${memory.accent || ''}`}>
           {memory.previewUrl && memory.type === 'image' && <img src={memory.previewUrl} alt={memory.fileName} loading="lazy" onLoad={(e) => { e.currentTarget.classList.add('loaded') }} onError={(e) => { e.target.style.display = 'none' }} />}
           {memory.previewUrl && memory.type === 'video' && <video src={memory.previewUrl} controls />}
@@ -79,7 +115,7 @@ export function MemoryModal({ memory, onClose, onDownload, onDelete, onApprove, 
         </div>
         <aside className="modal-details">
           <button className="close-button" onClick={handleClose} disabled={busy !== null}>Cerrar</button>
-          <span className="eyebrow">Detalle del recuerdo</span>
+          <span className="eyebrow">Detalle del recuerdo · {position} de {total}</span>
           <h3>{memory.fileName}</h3>
           <dl>
             {memory.guestName && memory.guestName !== 'Anonimo' && <div><dt>Subido por</dt><dd>{memory.guestName}</dd></div>}

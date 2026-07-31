@@ -2,7 +2,7 @@ import { weddingDate, coupleName, memoryDomain, invitationUrl } from '../constan
 import { Step } from '../components/Step'
 import { Reveal } from '../components/Reveal'
 
-export function HomeView({ onStart, memoryCount }) {
+export function HomeView({ onStart, memoryCount, canInstall, onInstall }) {
   return (
     <section className="hero section-grid">
       <div className="hero-copy reveal-card">
@@ -21,6 +21,9 @@ export function HomeView({ onStart, memoryCount }) {
           <a className="secondary-button" href={invitationUrl} target="_blank" rel="noreferrer">
             Ver invitacion
           </a>
+          {canInstall && (
+            <button className="secondary-button" onClick={onInstall}>Instalar app</button>
+          )}
           <span className="secure-note">Invitacion privada por QR</span>
         </div>
         <div className="steps">

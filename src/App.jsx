@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { isSupabaseConfigured, memoriesBucket, supabase } from './supabaseClient'
 import { coupleName, weddingDate, maxFilesPerUpload, maxPhotoSize, maxVideoSize, privateCode, invitationUrl, seedMemories } from './constants'
 import { mapSupabaseMemory } from './utils/mapSupabaseMemory'
-import { compressImage } from './utils/compressImage'
+import { compressImage, createThumbnail } from './utils/compressImage'
 import { formatFileSize } from './utils/formatFileSize'
 import { getSafeFileName } from './utils/getSafeFileName'
+import { useBeforeInstallPrompt } from './hooks/useBeforeInstallPrompt'
 import { HomeView } from './views/HomeView'
 import { UploadView } from './views/UploadView'
 import { AdminView } from './views/AdminView'
@@ -34,6 +35,19 @@ function App() {
   const [filters, setFilters] = useState({ query: '', moment: 'Todos', table: '' })
   const [toasts, setToasts] = useState([])
   const demoUploadTimerRef = useRef(null)
+  const selfInsertedIdsRef = useRef(new Set())
+  const { canInstall, promptInstall } = useBeforeInstallPrompt()
+
+  useEffect(() => {
+    const viewTitles = {
+      home: 'Kevin & Karen | Recuerdos de Boda',
+      upload: 'Subir recuerdos | Kevin & Karen',
+      admin: 'Panel | Kevin & Karen',
+      live: 'Galeria en vivo | Kevin & Karen',
+      qr: 'Codigo QR | Kevin & Karen',
+    }
+    document.title = viewTitles[view] || viewTitles.home
+  }, [view])
 
   function addToast(message, type = 'info') {
     const id = crypto.randomUUID()
@@ -83,6 +97,51 @@ function App() {
     }
 
     loadMemories()
+  }, [])
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return
+
+    const channel = supabase
+      .channel('wedding-memories-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'wedding_memories' },
+        (payload) => {
+          const incoming = mapSupabaseMemory(payload.new)
+          const isOwnUpload = selfInsertedIdsRef.current.has(incoming.id)
+          if (isOwnUpload) selfInsertedIdsRef.current.delete(incoming.id)
+          setMemories((current) => {
+            if (current.some((memory) => memory.id === incoming.id)) return current
+            return [incoming, ...current]
+          })
+          if (!isOwnUpload) {
+            addToast('Nuevo recuerdo publicado en la galeria en vivo.', 'info')
+          }
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'wedding_memories' },
+        (payload) => {
+          const updated = mapSupabaseMemory(payload.new)
+          setMemories((current) => current.map((memory) => (
+            memory.id === updated.id ? updated : memory
+          )))
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'wedding_memories' },
+        (payload) => {
+          setMemories((current) => current.filter((memory) => memory.id !== payload.old.id))
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   useEffect(() => {
@@ -166,7 +225,7 @@ function App() {
           if (processedFile.size < file.size) {
             notices.push(`${file.name} fue comprimida de ${formatFileSize(file.size)} a ${formatFileSize(processedFile.size)}.`)
           }
-        } catch (error) {
+        } catch {
           notices.push(`${file.name} no se pudo comprimir. Se intentara subir el archivo original.`)
         }
 
@@ -223,10 +282,15 @@ function App() {
     setProgress(8)
 
     if (isSupabaseConfigured) {
-      try {
-        const uploadedMemories = []
+      const succeededIds = new Set()
+      const failed = []
+      const uploadedMemories = []
 
-        for (const [index, item] of selectedFiles.entries()) {
+      for (const [index, item] of selectedFiles.entries()) {
+        const baseStart = Math.round((index / selectedFiles.length) * 92)
+        const perFileShare = 92 / selectedFiles.length
+
+        try {
           const filePath = [
             'uploads',
             new Date().toISOString().slice(0, 10),
@@ -239,6 +303,12 @@ function App() {
               cacheControl: '3600',
               contentType: item.file.type,
               upsert: false,
+              onUploadProgress: (event) => {
+                const loaded = event.total
+                  ? Math.round((event.loaded / event.total) * perFileShare)
+                  : 0
+                setProgress(baseStart + loaded)
+              },
             })
 
           if (storageError) throw storageError
@@ -246,6 +316,31 @@ function App() {
           const { data: publicFile } = supabase.storage
             .from(memoriesBucket)
             .getPublicUrl(filePath)
+
+          let thumbUrl = null
+
+          if (item.type === 'image') {
+            try {
+              const thumb = await createThumbnail(item.file)
+              const thumbPath = filePath.replace(/^uploads\//, 'thumbs/')
+              const { error: thumbError } = await supabase.storage
+                .from(memoriesBucket)
+                .upload(thumbPath, thumb, {
+                  cacheControl: '3600',
+                  contentType: 'image/jpeg',
+                  upsert: false,
+                })
+
+              if (!thumbError) {
+                const { data: publicThumb } = supabase.storage
+                  .from(memoriesBucket)
+                  .getPublicUrl(thumbPath)
+                thumbUrl = publicThumb.publicUrl
+              }
+            } catch {
+              thumbUrl = null
+            }
+          }
 
           const fileType = item.file.type.startsWith('video/') ? 'video' : 'image'
           const { data: inserted, error: insertError } = await supabase
@@ -261,6 +356,7 @@ function App() {
               mime_type: item.file.type,
               size_bytes: item.file.size,
               public_url: publicFile.publicUrl,
+              thumb_url: thumbUrl,
               approved: true,
             })
             .select('*')
@@ -268,20 +364,31 @@ function App() {
 
           if (insertError) throw insertError
 
+          selfInsertedIdsRef.current.add(inserted.id)
           uploadedMemories.push(mapSupabaseMemory(inserted))
+          succeededIds.add(item.id)
           URL.revokeObjectURL(item.previewUrl)
           setProgress(Math.round(((index + 1) / selectedFiles.length) * 92))
+        } catch {
+          failed.push(item.file.name)
         }
+      }
 
+      if (uploadedMemories.length > 0) {
         setMemories((current) => [...uploadedMemories, ...current])
-        setSelectedFiles([])
+        setSelectedFiles((current) => current.filter((item) => !succeededIds.has(item.id)))
+      }
+
+      if (failed.length > 0) {
+        setUploadState('error')
+        setUploadError(
+          `No se pudieron subir ${failed.length} archivo(s): ${failed.join(', ')}. Los que quedaron en la lista estan listos para reintentar.`,
+        )
+        addToast(`Fallaron ${failed.length} archivo(s) al subir.`, 'error')
+      } else {
         setProgress(100)
         setUploadState('success')
         addToast('Tus recuerdos se subieron y ya estan publicados en la galeria en vivo.', 'success')
-      } catch (error) {
-        setUploadState('error')
-        setUploadError(`No pudimos subir tus recuerdos. ${error.message}`)
-        addToast('Error al subir los archivos.', 'error')
       }
 
       return
@@ -304,6 +411,7 @@ function App() {
             fileName: item.file.name,
             type: item.type,
             previewUrl: item.previewUrl,
+            thumbUrl: item.previewUrl,
             accent: item.type === 'video' ? 'olive' : 'champagne',
             approved: true,
           }))
@@ -366,7 +474,7 @@ function App() {
   async function deleteMemory(id) {
     const memory = memories.find((item) => item.id === id)
 
-    if (isSupabaseConfigured && memory?.filePath) {
+    if (isSupabaseConfigured && isAdmin && memory?.filePath) {
       const { error: storageError } = await supabase.storage
         .from(memoriesBucket)
         .remove([memory.filePath])
@@ -394,7 +502,7 @@ function App() {
   }
 
   async function updateMemoryApproval(id, approved) {
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && isAdmin) {
       const { error } = await supabase
         .from('wedding_memories')
         .update({ approved })
@@ -487,7 +595,12 @@ function App() {
 
       {view === 'home' && (
         <div className="page-section" style={{ '--delay': '0ms' }}>
-          <HomeView onStart={() => setView('upload')} memoryCount={stats.total} />
+          <HomeView
+            onStart={() => setView('upload')}
+            memoryCount={stats.total}
+            canInstall={canInstall}
+            onInstall={promptInstall}
+          />
         </div>
       )}
 
@@ -559,6 +672,8 @@ function App() {
           onNext={() => goToMemory(1)}
           hasPrev={filteredMemories.findIndex((m) => m.id === activeMemory.id) > 0}
           hasNext={filteredMemories.findIndex((m) => m.id === activeMemory.id) < filteredMemories.length - 1}
+          position={filteredMemories.findIndex((m) => m.id === activeMemory.id) + 1}
+          total={filteredMemories.length}
         />
       )}
 

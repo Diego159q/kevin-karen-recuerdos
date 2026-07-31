@@ -1,4 +1,4 @@
-import { qrUrl, coupleName, weddingDate, memoryDomain, publicMemoryUrl } from '../constants'
+import { qrUrl, weddingDate, memoryDomain } from '../constants'
 
 export function QrView() {
   return (

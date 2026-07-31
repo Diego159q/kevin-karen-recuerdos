@@ -1,8 +1,9 @@
-const CACHE = 'kk-recuerdos-v1'
+const CACHE = 'kk-recuerdos-v2'
 const PRECACHE = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
+  '/icons/icon.svg',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
 ]
@@ -31,7 +32,19 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url)
   if (url.origin !== self.location.origin) return
-  if (url.pathname.startsWith('/supabase') || url.pathname.includes('supabase.co')) return
+
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const copy = response.clone()
+          caches.open(CACHE).then((cache) => cache.put('/index.html', copy))
+          return response
+        })
+        .catch(() => caches.match('/index.html')),
+    )
+    return
+  }
 
   event.respondWith(
     caches.match(request).then((cached) => {

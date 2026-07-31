@@ -55,8 +55,8 @@ export function LiveView({ memories }) {
         <div className="live-wall">
           {latest.map((memory, index) => (
             <article key={memory.id} className={`live-tile ${memory.accent || ''} stagger-item`} style={{ '--delay': `${index * 80}ms` }}>
-              {memory.previewUrl && memory.type === 'image' && <img src={memory.previewUrl} alt={memory.fileName} loading="lazy" onLoad={(e) => { e.currentTarget.classList.add('loaded') }} onError={(e) => { e.target.style.display = 'none' }} />}
-              {memory.previewUrl && memory.type === 'video' && <video src={memory.previewUrl} muted autoPlay loop />}
+              {memory.previewUrl && memory.type === 'image' && <img src={memory.thumbUrl || memory.previewUrl} alt={memory.fileName} loading="lazy" onLoad={(e) => { e.currentTarget.classList.add('loaded') }} onError={(e) => { e.target.style.display = 'none' }} />}
+              {memory.previewUrl && memory.type === 'video' && <video src={memory.previewUrl} muted autoPlay loop preload="metadata" />}
               {!memory.previewUrl && <span>{memory.type === 'video' ? 'Video' : 'Foto'}</span>}
               {memory.previewUrl && memory.type === 'video' && (
                 <span className="play-badge">

@@ -5,8 +5,8 @@ export function MemoryCard({ memory, onOpen, onDownload, onApprove, onHide }) {
   return (
     <article className={`memory-card ${memory.approved ? 'approved' : 'pending'}`}>
       <button className={`memory-media ${memory.accent || ''}`} onClick={onOpen}>
-        {memory.previewUrl && memory.type === 'image' && <img src={memory.previewUrl} alt={memory.fileName} loading="lazy" onLoad={(e) => { e.currentTarget.classList.add('loaded') }} onError={(e) => { e.target.style.display = 'none' }} />}
-        {memory.previewUrl && memory.type === 'video' && <video src={memory.previewUrl} muted />}
+        {memory.previewUrl && memory.type === 'image' && <img src={memory.thumbUrl || memory.previewUrl} alt={memory.fileName} loading="lazy" onLoad={(e) => { e.currentTarget.classList.add('loaded') }} onError={(e) => { e.target.style.display = 'none' }} />}
+        {memory.previewUrl && memory.type === 'video' && <video src={memory.previewUrl} muted preload="none" />}
         {!memory.previewUrl && <span>{memory.type === 'video' ? 'Video' : 'Foto'}</span>}
         {memory.previewUrl && memory.type === 'video' && (
           <span className="play-badge">
