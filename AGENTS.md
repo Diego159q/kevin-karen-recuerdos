@@ -4,7 +4,7 @@
 Desarrollador senior de React encargado del mantenimiento y evolución del proyecto `kevin-karen-recuerdos`. Debes respetar estrictamente las convenciones, estructura y decisiones técnicas documentadas aquí. Antes de escribir código, verifica que entiendes la estructura actual. Tus cambios deben compilar (`npm run build` sin errores) y seguir las buenas prácticas de React.
 
 ## Resumen del producto
-Aplicación web **SPA** para una boda (Kevin & Karen, fecha 08.08.2026). Los invitados escanean un **QR**, entran a la app, llenan su nombre/mesa/relación/momento y suben **fotos y videos** que se **publican automáticamente** en una **galería en vivo** proyectable en la fiesta. Los novios gestionan el contenido desde un **panel privado** (ocultar o eliminar recuerdos). Incluye página de QR imprimible y descarga masiva de todo el contenido en **ZIP**.
+Aplicación web **SPA** para una boda (Kevin & Karen, fecha 08.08.2026). Los invitados escanean un **QR**, entran a la app y suben **fotos y videos de forma anónima** (sin llenar formularios) que se **publican automáticamente** en una **galería en vivo** proyectable en la fiesta. Los novios gestionan el contenido desde un **panel privado** (ocultar o eliminar recuerdos). Incluye página de QR imprimible y descarga masiva de todo el contenido en **ZIP**.
 
 ## Stack tecnológico
 - **React** (latest, ~19) + `react-dom`
@@ -60,10 +60,13 @@ src/
 - El código debe acceder a `supabase` **solo tras verificar `isSupabaseConfigured`** (nunca asumir que no es `null`).
 
 ## Reglas de subida de archivos
+- **Subida 100% anónima**: sin formulario. Solo se eligen archivos y se pulsa subir.
 - Máximo **20 archivos por lote** (`maxFilesPerUpload`).
 - Fotos: límite **10 MB** (`maxPhotoSize`). Videos: **100 MB** (`maxVideoSize`).
 - Imágenes JPEG/PNG/WebP > 10 MB se **comprimen automáticamente** con `compressImage`: escala a máx. 2200px y reexporta como JPEG calidad 0.82. Si la compresión no reduce tamaño, se usa el original.
 - Cada archivo aceptado recibe `id` único, `previewUrl` con `URL.createObjectURL` (revocado al quitar/seleccionar).
+- Las subidas se guardan con valores por defecto: `guest_name: 'Anonimo'`, `table_name: 'Sin mesa'`, `relation: 'Invitado'`, `moment: 'Otro'`.
+- La UI de tarjetas/modal/galería **oculta los valores por defecto** ('Anonimo', 'Sin mesa', 'Invitado', 'Otro') para no mostrar ruido.
 
 ## Flujo de publicación (sin moderación previa)
 - Al subir, `approved: true` — el recuerdo se **publica automáticamente** en la galería en vivo, sin revisión de los novios.
@@ -105,4 +108,16 @@ STITCH_API_KEY=tu_api_key_de_google_stitch            # no usada aún
 - Soporte para formatos de imagen modernos (AVIF/HEIC) en `compressImage`.
 - Descarga ZIP en paralelo con límite de concurrencia.
 - Error boundary global para que un fallo de vista no tumbe toda la app.
-- PWA/manifest para instalación en móvil.
+
+## Mejoras visuales implementadas (no revertir)
+1. **Reveal on scroll** (`Reveal.jsx`): IntersectionObserver agrega `.reveal-visible` al entrar en el viewport. Respeta `prefers-reduced-motion` (el contenido se muestra siempre).
+2. **Iconos SVG inline** (`Icons.jsx`): set central de iconos con `name` (upload, panel, play, qr, photo, video, layers, eye, eyeOff, check, x, info, chevronLeft/Right, download, trash). Usado en topbar, stats, toasts, botones y badges.
+3. **Dropzone drag state**: clase `.dragging` con borde dorado + glow mientras se arrastran archivos encima.
+4. **Play badge**: círculo semi-transparente con icono play sobre videos en tarjetas, previews y live wall.
+5. **Blur-up de imágenes**: las `<img>` arrancan con `opacity: 0` sobre un placeholder con shimmer (`.media::before` + `@keyframes shimmer`) y hacen fade-in al cargar (`onLoad` agrega `.loaded`).
+6. **Contador dinámico**: el card flotante del hero muestra el total real de recuerdos (`stats.total`); si aún no hay, conserva "+128 esperados".
+7. **Lightbox prev/next**: flechas `.modal-nav` (‹ ›) + teclas `←`/`→` en `MemoryModal`. Al navegar se resetea la confirmación de borrado. Después de eliminar, el modal avanza al siguiente recuerdo filtrado.
+8. **Ken Burns + barra de progreso**: los slides activos animan zoom sutil (`kenBurns 9s`); la `.live-progress` (4s, claveada por `slideIndex`) se sincroniza con el auto-avance del slideshow.
+9. **Toast con iconos**: cada toast muestra icono según tipo (check/x/info) en `.toast-icon`.
+10. **Splash screen**: pantalla inicial con monograma K&K y anillos pulsantes; se desvanece sola (~2s) vía estado local en `SplashScreen.jsx`.
+11. **PWA**: `public/manifest.webmanifest`, `public/sw.js` (network-first con fallback a cache para requests del mismo origin), iconos PNG generados en `public/icons/`, registro en `main.jsx` y links en `index.html`. `theme_color` = `#3f4a38`.

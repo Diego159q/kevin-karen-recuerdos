@@ -1,18 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
 import { formatDate } from '../utils/formatDate'
+import { Icon } from './Icons'
 
-export function MemoryModal({ memory, onClose, onDownload, onDelete, onApprove, onHide }) {
+export function MemoryModal({ memory, onClose, onDownload, onDelete, onApprove, onHide, onPrev, onNext, hasPrev, hasNext }) {
   const [busy, setBusy] = useState(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
-
+  const onPrevRef = useRef(onPrev)
+  onPrevRef.current = onPrev
+  const onNextRef = useRef(onNext)
+  onNextRef.current = onNext
   const busyRef = useRef(busy)
   busyRef.current = busy
 
   useEffect(() => {
     function handleKey(event) {
-      if (event.key === 'Escape' && !busyRef.current) onCloseRef.current()
+      if (busyRef.current) return
+      if (event.key === 'Escape') onCloseRef.current()
+      if (event.key === 'ArrowLeft') onPrevRef.current?.()
+      if (event.key === 'ArrowRight') onNextRef.current?.()
     }
     window.addEventListener('keydown', handleKey)
     document.body.style.overflow = 'hidden'
@@ -21,6 +28,11 @@ export function MemoryModal({ memory, onClose, onDownload, onDelete, onApprove, 
       document.body.style.overflow = ''
     }
   }, [])
+
+  useEffect(() => {
+    setConfirmingDelete(false)
+    setBusy(null)
+  }, [memory.id])
 
   async function runAction(action, callback) {
     if (busy) return
@@ -43,19 +55,37 @@ export function MemoryModal({ memory, onClose, onDownload, onDelete, onApprove, 
     <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={handleClose}>
       <article className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className={`modal-media ${memory.accent || ''}`}>
-          {memory.previewUrl && memory.type === 'image' && <img src={memory.previewUrl} alt={memory.fileName} loading="lazy" onError={(e) => { e.target.style.display = 'none' }} />}
+          {memory.previewUrl && memory.type === 'image' && <img src={memory.previewUrl} alt={memory.fileName} loading="lazy" onLoad={(e) => { e.currentTarget.classList.add('loaded') }} onError={(e) => { e.target.style.display = 'none' }} />}
           {memory.previewUrl && memory.type === 'video' && <video src={memory.previewUrl} controls />}
           {!memory.previewUrl && <span>{memory.type === 'video' ? 'Video destacado' : 'Foto destacada'}</span>}
+          <button
+            className="modal-nav prev"
+            type="button"
+            aria-label="Recuerdo anterior"
+            onClick={() => { setConfirmingDelete(false); onPrev() }}
+            disabled={!hasPrev}
+          >
+            <Icon name="chevronLeft" size={22} />
+          </button>
+          <button
+            className="modal-nav next"
+            type="button"
+            aria-label="Recuerdo siguiente"
+            onClick={() => { setConfirmingDelete(false); onNext() }}
+            disabled={!hasNext}
+          >
+            <Icon name="chevronRight" size={22} />
+          </button>
         </div>
         <aside className="modal-details">
           <button className="close-button" onClick={handleClose} disabled={busy !== null}>Cerrar</button>
           <span className="eyebrow">Detalle del recuerdo</span>
           <h3>{memory.fileName}</h3>
           <dl>
-            <div><dt>Subido por</dt><dd>{memory.guestName}</dd></div>
-            <div><dt>Mesa</dt><dd>{memory.table}</dd></div>
-            <div><dt>Relacion</dt><dd>{memory.relation}</dd></div>
-            <div><dt>Momento</dt><dd>{memory.moment}</dd></div>
+            {memory.guestName && memory.guestName !== 'Anonimo' && <div><dt>Subido por</dt><dd>{memory.guestName}</dd></div>}
+            {memory.table && memory.table !== 'Sin mesa' && <div><dt>Mesa</dt><dd>{memory.table}</dd></div>}
+            {memory.relation && memory.relation !== 'Invitado' && <div><dt>Relacion</dt><dd>{memory.relation}</dd></div>}
+            {memory.moment && memory.moment !== 'Otro' && <div><dt>Momento</dt><dd>{memory.moment}</dd></div>}
             <div><dt>Estado</dt><dd>{memory.approved ? 'En vivo' : 'Oculto'}</dd></div>
             <div><dt>Fecha y hora</dt><dd>{formatDate(memory.uploadedAt)}</dd></div>
           </dl>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { isSupabaseConfigured, memoriesBucket, supabase } from './supabaseClient'
-import { coupleName, maxFilesPerUpload, maxPhotoSize, maxVideoSize, privateCode, invitationUrl, seedMemories } from './constants'
+import { coupleName, weddingDate, maxFilesPerUpload, maxPhotoSize, maxVideoSize, privateCode, invitationUrl, seedMemories } from './constants'
 import { mapSupabaseMemory } from './utils/mapSupabaseMemory'
 import { compressImage } from './utils/compressImage'
 import { formatFileSize } from './utils/formatFileSize'
@@ -12,6 +12,8 @@ import { LiveView } from './views/LiveView'
 import { QrView } from './views/QrView'
 import { MemoryModal } from './components/MemoryModal'
 import { ToastContainer } from './components/ToastContainer'
+import { SplashScreen } from './components/SplashScreen'
+import { Icon } from './components/Icons'
 
 function App() {
   const [view, setView] = useState('home')
@@ -43,14 +45,6 @@ function App() {
       }, 300)
     }, 3500)
   }
-
-  const [form, setForm] = useState({
-    guestName: '',
-    table: '',
-    relation: '',
-    moment: 'Ceremonia',
-    consent: false,
-  })
 
   useEffect(() => {
     if (!isSupabaseConfigured) return
@@ -118,13 +112,12 @@ function App() {
   }, [filters, memories])
 
   const stats = useMemo(() => {
-    const guests = new Set(memories.map((memory) => memory.guestName)).size
     return {
       photos: memories.filter((memory) => memory.type === 'image').length,
       videos: memories.filter((memory) => memory.type === 'video').length,
+      total: memories.length,
       approved: memories.filter((memory) => memory.approved).length,
       hidden: memories.filter((memory) => !memory.approved).length,
-      guests,
       latest: memories
         .slice()
         .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt))[0],
@@ -204,10 +197,26 @@ function App() {
     })
   }
 
+  function resetUpload() {
+    setSelectedFiles([])
+    setUploadState('idle')
+    setUploadError('')
+    setFileNotice('')
+    setProgress(0)
+  }
+
+  function goToMemory(direction) {
+    const index = filteredMemories.findIndex((memory) => memory.id === activeMemory?.id)
+    if (index === -1) return
+    const nextIndex = index + direction
+    if (nextIndex < 0 || nextIndex >= filteredMemories.length) return
+    setActiveMemory(filteredMemories[nextIndex])
+  }
+
   async function submitUpload(event) {
     event.preventDefault()
 
-    if (!form.guestName.trim() || selectedFiles.length === 0 || !form.consent) return
+    if (selectedFiles.length === 0) return
 
     setUploadState('uploading')
     setUploadError('')
@@ -242,10 +251,10 @@ function App() {
           const { data: inserted, error: insertError } = await supabase
             .from('wedding_memories')
             .insert({
-              guest_name: form.guestName.trim(),
-              table_name: form.table.trim() || 'Sin mesa',
-              relation: form.relation.trim() || 'Invitado',
-              moment: form.moment,
+              guest_name: 'Anonimo',
+              table_name: 'Sin mesa',
+              relation: 'Invitado',
+              moment: 'Otro',
               file_name: item.file.name,
               file_path: filePath,
               file_type: fileType,
@@ -269,7 +278,6 @@ function App() {
         setProgress(100)
         setUploadState('success')
         addToast('Tus recuerdos se subieron y ya estan publicados en la galeria en vivo.', 'success')
-        setForm({ guestName: '', table: '', relation: '', moment: 'Ceremonia', consent: false })
       } catch (error) {
         setUploadState('error')
         setUploadError(`No pudimos subir tus recuerdos. ${error.message}`)
@@ -288,10 +296,10 @@ function App() {
           timerRef.current = null
           const uploaded = selectedFiles.map((item) => ({
             id: item.id,
-            guestName: form.guestName.trim(),
-            table: form.table.trim() || 'Sin mesa',
-            relation: form.relation.trim() || 'Invitado',
-            moment: form.moment,
+            guestName: 'Anonimo',
+            table: 'Sin mesa',
+            relation: 'Invitado',
+            moment: 'Otro',
             uploadedAt: new Date().toISOString(),
             fileName: item.file.name,
             type: item.type,
@@ -303,7 +311,6 @@ function App() {
           setSelectedFiles([])
           setUploadState('success')
           addToast('Tus recuerdos se subieron y ya estan publicados en la galeria en vivo.', 'success')
-          setForm({ guestName: '', table: '', relation: '', moment: 'Ceremonia', consent: false })
           return 100
         }
 
@@ -380,7 +387,9 @@ function App() {
     }
 
     setMemories((current) => current.filter((item) => item.id !== id))
-    setActiveMemory(null)
+    const deletedIndex = filteredMemories.findIndex((item) => item.id === id)
+    const remaining = filteredMemories.filter((item) => item.id !== id)
+    setActiveMemory(remaining[deletedIndex] || remaining[deletedIndex - 1] || null)
     addToast('El recuerdo fue eliminado.', 'success')
   }
 
@@ -455,15 +464,19 @@ function App() {
 
         <nav className="nav-actions" aria-label="Navegacion principal">
           <button className={view === 'upload' ? 'active' : ''} onClick={() => setView('upload')}>
+            <Icon name="upload" size={16} />
             Subir
           </button>
           <button className={view === 'admin' ? 'active' : ''} onClick={() => setView('admin')}>
+            <Icon name="panel" size={16} />
             Panel
           </button>
           <button className={view === 'live' ? 'active' : ''} onClick={() => setView('live')}>
+            <Icon name="eye" size={16} />
             En vivo
           </button>
           <button className={view === 'qr' ? 'active' : ''} onClick={() => setView('qr')}>
+            <Icon name="qr" size={16} />
             QR
           </button>
           <a href={invitationUrl} target="_blank" rel="noreferrer">
@@ -474,15 +487,13 @@ function App() {
 
       {view === 'home' && (
         <div className="page-section" style={{ '--delay': '0ms' }}>
-          <HomeView onStart={() => setView('upload')} />
+          <HomeView onStart={() => setView('upload')} memoryCount={stats.total} />
         </div>
       )}
 
       {view === 'upload' && (
         <div className="page-section" style={{ '--delay': '50ms' }}>
         <UploadView
-          form={form}
-          setForm={setForm}
           selectedFiles={selectedFiles}
           handleFiles={handleFiles}
           removeSelectedFile={removeSelectedFile}
@@ -491,6 +502,7 @@ function App() {
           uploadError={uploadError}
           fileNotice={fileNotice}
           progress={progress}
+          resetUpload={resetUpload}
         />
       </div>
       )}
@@ -543,10 +555,16 @@ function App() {
           onDelete={() => deleteMemory(activeMemory.id)}
           onApprove={() => updateMemoryApproval(activeMemory.id, true)}
           onHide={() => updateMemoryApproval(activeMemory.id, false)}
+          onPrev={() => goToMemory(-1)}
+          onNext={() => goToMemory(1)}
+          hasPrev={filteredMemories.findIndex((m) => m.id === activeMemory.id) > 0}
+          hasNext={filteredMemories.findIndex((m) => m.id === activeMemory.id) < filteredMemories.length - 1}
         />
       )}
 
       <ToastContainer toasts={toasts} />
+
+      <SplashScreen coupleName={coupleName} weddingDate={weddingDate} />
     </main>
   )
 }

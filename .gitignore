@@ -9,3 +9,4 @@ yarn-error.log*
 
 .vercel
 .env*
+dev-server.log

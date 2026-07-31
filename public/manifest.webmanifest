@@ -1,0 +1,13 @@
+{
+  "name": "Kevin & Karen | Recuerdos de Boda",
+  "short_name": "K&K Recuerdos",
+  "description": "Fotos y videos de la boda de Kevin & Karen.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fff8ed",
+  "theme_color": "#3f4a38",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

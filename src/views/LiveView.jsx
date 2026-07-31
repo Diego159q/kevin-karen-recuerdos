@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Icon } from '../components/Icons'
 
 export function LiveView({ memories }) {
   const [slideshow, setSlideshow] = useState(false)
@@ -18,7 +19,7 @@ export function LiveView({ memories }) {
       <div className="live-header">
         <span className="eyebrow">Galeria en vivo</span>
         <h2>Recuerdos apareciendo durante la fiesta</h2>
-        <p>Modo ideal para una TV con moderacion previa antes de publicar.</p>
+        <p>Cada recuerdo subido se publica automaticamente en tiempo real.</p>
         {latest.length > 1 && (
           <button
             className="secondary-button"
@@ -41,20 +42,28 @@ export function LiveView({ memories }) {
               {memory.previewUrl && memory.type === 'image' && <img src={memory.previewUrl} alt={memory.fileName} loading="lazy" onError={(e) => { e.target.style.display = 'none' }} />}
               {memory.previewUrl && memory.type === 'video' && <video src={memory.previewUrl} muted autoPlay loop />}
               <div className="live-slide-info">
-                <strong>{memory.guestName}</strong>
-                <span>{memory.moment}</span>
+                {memory.guestName && memory.guestName !== 'Anonimo' && <strong>{memory.guestName}</strong>}
+                {memory.moment && memory.moment !== 'Otro' && <span>{memory.moment}</span>}
               </div>
             </article>
           ))}
+          <div className="live-progress" aria-hidden="true">
+            <div key={slideIndex} />
+          </div>
         </div>
       ) : (
         <div className="live-wall">
           {latest.map((memory, index) => (
             <article key={memory.id} className={`live-tile ${memory.accent || ''} stagger-item`} style={{ '--delay': `${index * 80}ms` }}>
-              {memory.previewUrl && memory.type === 'image' && <img src={memory.previewUrl} alt={memory.fileName} loading="lazy" onError={(e) => { e.target.style.display = 'none' }} />}
+              {memory.previewUrl && memory.type === 'image' && <img src={memory.previewUrl} alt={memory.fileName} loading="lazy" onLoad={(e) => { e.currentTarget.classList.add('loaded') }} onError={(e) => { e.target.style.display = 'none' }} />}
               {memory.previewUrl && memory.type === 'video' && <video src={memory.previewUrl} muted autoPlay loop />}
               {!memory.previewUrl && <span>{memory.type === 'video' ? 'Video' : 'Foto'}</span>}
-              <strong>{memory.guestName}</strong>
+              {memory.previewUrl && memory.type === 'video' && (
+                <span className="play-badge">
+                  <Icon name="play" size={20} />
+                </span>
+              )}
+              {memory.guestName && memory.guestName !== 'Anonimo' && <strong>{memory.guestName}</strong>}
             </article>
           ))}
         </div>

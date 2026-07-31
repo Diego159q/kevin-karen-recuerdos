@@ -2,6 +2,7 @@ import { isSupabaseConfigured } from '../supabaseClient'
 import { moments } from '../constants'
 import { Stat } from '../components/Stat'
 import { MemoryCard } from '../components/MemoryCard'
+import { Icon } from '../components/Icons'
 
 export function AdminView({
   isAdmin,
@@ -76,6 +77,7 @@ export function AdminView({
         </div>
         <div className="admin-actions">
           <button className="secondary-button" onClick={() => downloadAllMemories(filteredMemories)} disabled={isDownloadingZip}>
+            <Icon name="download" size={16} />
             {isDownloadingZip ? 'Preparando ZIP...' : 'Descargar ZIP'}
           </button>
           <button className="secondary-button" onClick={handleLogout}>Salir</button>
@@ -83,11 +85,11 @@ export function AdminView({
       </div>
 
       <div className="stats-grid">
-        <Stat title="Fotos" value={stats.photos} />
-        <Stat title="Videos" value={stats.videos} />
-        <Stat title="Invitados" value={stats.guests} />
-        <Stat title="En vivo" value={stats.approved} />
-        <Stat title="Ocultos" value={stats.hidden} />
+        <Stat title="Fotos" value={stats.photos} icon="photo" />
+        <Stat title="Videos" value={stats.videos} icon="video" />
+        <Stat title="Total" value={stats.total} icon="layers" />
+        <Stat title="En vivo" value={stats.approved} icon="eye" />
+        <Stat title="Ocultos" value={stats.hidden} icon="eyeOff" />
       </div>
 
       <div className={`integration-status ${isSupabaseConfigured ? 'connected' : 'demo'}`}>
@@ -102,7 +104,7 @@ export function AdminView({
         <input
           value={filters.query}
           onChange={(event) => setFilters((prev) => ({ ...prev, query: event.target.value }))}
-          placeholder="Buscar invitado, relacion o archivo"
+          placeholder="Buscar por nombre de archivo"
         />
         <select
           value={filters.moment}

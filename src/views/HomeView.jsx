@@ -1,7 +1,8 @@
 import { weddingDate, coupleName, memoryDomain, invitationUrl } from '../constants'
 import { Step } from '../components/Step'
+import { Reveal } from '../components/Reveal'
 
-export function HomeView({ onStart }) {
+export function HomeView({ onStart, memoryCount }) {
   return (
     <section className="hero section-grid">
       <div className="hero-copy reveal-card">
@@ -23,9 +24,9 @@ export function HomeView({ onStart }) {
           <span className="secure-note">Invitacion privada por QR</span>
         </div>
         <div className="steps">
-          <Step number="01" title="Escanea" text="Ingresa desde el QR preparado para los invitados." />
-          <Step number="02" title="Acompanamos" text="Escribe tu nombre y el momento que quieres compartir." />
-          <Step number="03" title="Bendice el recuerdo" text="Sube fotos o videos para nuestra galeria privada." />
+          <Reveal delay={100}><Step number="01" title="Escanea" text="Ingresa desde el QR preparado para los invitados." /></Reveal>
+          <Reveal delay={200}><Step number="02" title="Sin formularios" text="No llenas nada: elige tus fotos o videos y subelos al instante." /></Reveal>
+          <Reveal delay={300}><Step number="03" title="Bendice el recuerdo" text="Tu recuerdo se publica al momento en la galeria en vivo." /></Reveal>
         </div>
         <div className="invitation-note">
           <img src={`${invitationUrl}assets/fotos/logo.svg`} alt="Logo Kevin y Karen" />
@@ -52,8 +53,8 @@ export function HomeView({ onStart }) {
           <small>Escanea y comparte</small>
         </div>
         <div className="floating-card count-card">
-          <strong>+128</strong>
-          <small>recuerdos esperados</small>
+          <strong>{memoryCount > 0 ? `+${memoryCount}` : '+128'}</strong>
+          <small>{memoryCount > 0 ? 'recuerdos compartidos' : 'recuerdos esperados'}</small>
         </div>
       </div>
     </section>
