@@ -1009,6 +1009,9 @@ dd {
 }
 
 .qr-print-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   width: min(560px, 100%);
   padding: clamp(26px, 5vw, 48px);
   border: 1px solid rgba(104, 114, 93, 0.22);
@@ -1020,22 +1023,53 @@ dd {
   text-align: center;
 }
 
+.qr-print-card .eyebrow {
+  margin-top: 6px;
+}
+
 .qr-print-card h2 {
   margin-top: 18px;
 }
 
 .qr-print-card p {
+  max-width: 42ch;
+  margin: 0;
   color: var(--muted);
   line-height: 1.65;
 }
 
-.qr-image {
+.qr-frame {
   width: min(320px, 82vw);
-  margin: 18px auto;
+  margin-top: 18px;
   padding: 14px;
   border: 1px solid rgba(104, 114, 93, 0.2);
   border-radius: 24px;
   background: var(--white);
+  box-shadow: 0 10px 28px rgba(40, 54, 34, 0.1);
+}
+
+.qr-image {
+  display: block;
+  width: 100%;
+  border-radius: 14px;
+}
+
+.qr-domain {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+  margin-top: 14px;
+  padding: 11px 18px;
+  border: 1px solid rgba(104, 114, 93, 0.24);
+  border-radius: 999px;
+  background: rgba(237, 240, 230, 0.62);
+  color: var(--olive-dark);
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .qr-actions {
