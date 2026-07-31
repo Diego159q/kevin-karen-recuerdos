@@ -934,6 +934,21 @@ dd {
   font-weight: 700;
 }
 
+.confirm-actions {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(143, 60, 53, 0.08);
+  border: 1px solid rgba(143, 60, 53, 0.24);
+}
+
+.confirm-actions > span {
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
 .live-screen {
   min-height: calc(100vh - 140px);
   border-radius: 34px;
