@@ -1880,3 +1880,101 @@ dd {
   }
 }
 
+/* ========== CENTRADO Y TIPOGRAFIA ========== */
+h1,
+h2,
+h3 {
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+.hero-copy,
+.section-heading:not(.split-heading),
+.login-card,
+.live-header,
+.upload-card,
+.stat-card,
+.steps article,
+.memory-info {
+  text-align: center;
+}
+
+.hero-copy p,
+.section-heading:not(.split-heading) p,
+.login-card p,
+.live-header p {
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.hero-actions,
+.card-actions,
+.admin-actions {
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.stat-card .stat-head,
+.modal-details .eyebrow {
+  justify-content: center;
+}
+
+.status-pill {
+  margin-inline: auto;
+}
+
+.hero-copy blockquote {
+  max-width: 560px;
+  margin-right: auto;
+  margin-left: auto;
+  border-left: 0;
+  border-top: 3px solid var(--olive);
+  border-radius: 18px;
+}
+
+.hero-copy cite {
+  text-align: center;
+}
+
+.steps article {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.invitation-note {
+  justify-content: center;
+  text-align: left;
+}
+
+.upload-card .limit-note,
+.upload-card .privacy-note,
+.upload-card .notice-message,
+.upload-card .error-message {
+  text-align: center;
+}
+
+.modal-details h3 {
+  text-align: center;
+}
+
+.login-card h2 {
+  margin-top: 10px;
+}
+
+.qr-print-card .brand-mark.large {
+  margin-bottom: 6px;
+}
+
+@media (max-width: 680px) {
+  .steps article {
+    min-height: 0;
+    padding: 20px 16px;
+  }
+}
+
