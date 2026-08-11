@@ -1,15 +1,26 @@
 -- ============================================================
--- kevin-karen-recuerdos · Seguridad y datos
--- Ejecutar UNA VEZ en el SQL Editor de Supabase (proyecto real).
+-- kevin-karen-recuerdos · Seguridad y datos (version reforzada)
+-- Ejecutar en el SQL Editor de Supabase (idempotente: puede
+-- re-ejecutarse sin errores).
 -- ============================================================
 
--- 1) Columna para miniaturas (usada por las grillas)
+-- 1) Columnas que la app espera (thumb_url faltaba -> causaba el 400)
 alter table public.wedding_memories
-  add column if not exists thumb_url text;
+  add column if not exists thumb_url text,
+  add column if not exists created_at timestamptz default now();
 
--- 2) Realtime: permite que la app reciba INSERT/UPDATE/DELETE en vivo
---    (requiere que la tabla esté en la publicacion)
-alter publication supabase_realtime add table public.wedding_memories;
+-- 2) Realtime: agregar SOLO si aun no esta en la publicacion
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'wedding_memories'
+  ) then
+    alter publication supabase_realtime add table public.wedding_memories;
+  end if;
+end $$;
 
 -- 3) ROW LEVEL SECURITY en la tabla
 alter table public.wedding_memories enable row level security;
@@ -44,10 +55,6 @@ create policy "Borrado admin"
   using (true);
 
 -- 4) STORAGE (bucket: wedding-memories)
---    El bucket es PUBLICO para lectura (las URLs public_url se usan en la galeria).
---    Subida anonima permitida (los invitados suben sin login).
---    Borrado SOLO con sesion de admin (authenticated).
-
 drop policy if exists "Subida anonima de archivos" on storage.objects;
 create policy "Subida anonima de archivos"
   on storage.objects
@@ -68,3 +75,6 @@ create policy "Borrado admin de archivos"
   for delete
   to authenticated
   using (bucket_id = 'wedding-memories');
+
+-- 5) Forzar que PostgREST relea el esquema (limpia el 400 del select=*)
+notify pgrst, 'reload schema';

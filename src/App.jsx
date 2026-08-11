@@ -177,9 +177,6 @@ function App() {
       total: memories.length,
       approved: memories.filter((memory) => memory.approved).length,
       hidden: memories.filter((memory) => !memory.approved).length,
-      latest: memories
-        .slice()
-        .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt))[0],
     }
   }, [memories])
 
@@ -289,9 +286,11 @@ function App() {
       for (const [index, item] of selectedFiles.entries()) {
         const baseStart = Math.round((index / selectedFiles.length) * 92)
         const perFileShare = 92 / selectedFiles.length
+        let filePath = null
+        let thumbPath = null
 
         try {
-          const filePath = [
+          filePath = [
             'uploads',
             new Date().toISOString().slice(0, 10),
             `${crypto.randomUUID()}-${getSafeFileName(item.file.name)}`,
@@ -322,7 +321,7 @@ function App() {
           if (item.type === 'image') {
             try {
               const thumb = await createThumbnail(item.file)
-              const thumbPath = filePath.replace(/^uploads\//, 'thumbs/')
+              thumbPath = filePath.replace(/^uploads\//, 'thumbs/')
               const { error: thumbError } = await supabase.storage
                 .from(memoriesBucket)
                 .upload(thumbPath, thumb, {
@@ -370,6 +369,13 @@ function App() {
           URL.revokeObjectURL(item.previewUrl)
           setProgress(Math.round(((index + 1) / selectedFiles.length) * 92))
         } catch {
+          if (filePath) {
+            const paths = thumbPath ? [filePath, thumbPath] : [filePath]
+            await supabase.storage
+              .from(memoriesBucket)
+              .remove(paths)
+              .catch(() => {})
+          }
           failed.push(item.file.name)
         }
       }
@@ -463,12 +469,21 @@ function App() {
     setLoginPassword('')
   }
 
-  function downloadMemory(memory) {
+  async function downloadMemory(memory) {
     if (!memory.previewUrl) return
-    const link = document.createElement('a')
-    link.href = memory.previewUrl
-    link.download = memory.fileName
-    link.click()
+    try {
+      const response = await fetch(memory.previewUrl)
+      if (!response.ok) throw new Error('No se pudo descargar el archivo.')
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = memory.fileName
+      link.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch {
+      addToast('No se pudo descargar el recuerdo.', 'error')
+    }
   }
 
   async function deleteMemory(id) {
@@ -482,6 +497,14 @@ function App() {
       if (storageError) {
         addToast(`No se pudo eliminar el archivo. ${storageError.message}`, 'error')
         return
+      }
+
+      if (memory.filePath.startsWith('uploads/')) {
+        const thumbPath = memory.filePath.replace(/^uploads\//, 'thumbs/')
+        await supabase.storage
+          .from(memoriesBucket)
+          .remove([thumbPath])
+          .catch(() => {})
       }
 
       const { error: deleteError } = await supabase
